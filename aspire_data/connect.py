@@ -27,12 +27,12 @@ Convenience wrappers for the 4 Aspire APIs (one-liner):
 
 CONFIG (env, public-safe — set in your .env)
 
-    CONNECT_BASE_URL   https://posit.aspire.qa     (default)
+    CONNECT_BASE_URL   https://<your-connect-host>   (env-driven)
     CONNECT_API_KEY    <your Connect key>
-    HANA_API_GUID      52f29754-...
-    RENDER_API_GUID    cb97879f-...
-    JOBS_API_GUID      08ba41b5-...
-    NOTIFY_API_GUID    296488c2-...
+    HANA_API_GUID      <your hana-api GUID>
+    RENDER_API_GUID    <your render-api GUID>
+    JOBS_API_GUID      <your jobs-api GUID>
+    NOTIFY_API_GUID    <your notify-api GUID>
 
 The 4 GUID env vars are required for the convenience wrappers; the
 generic ConnectClient just needs the guid passed in.
@@ -46,7 +46,11 @@ import httpx
 
 
 def _base() -> str:
-    return os.environ.get("CONNECT_BASE_URL", "https://posit.aspire.qa").rstrip("/")
+    url = os.environ.get("CONNECT_BASE_URL", "").rstrip("/")
+    if not url:
+        raise RuntimeError(
+            "CONNECT_BASE_URL not set — set the URL of your Posit Connect server.")
+    return url
 
 
 def _key() -> str:

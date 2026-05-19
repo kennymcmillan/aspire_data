@@ -1,5 +1,7 @@
 # aspire_data
 
+[![public-safe audit](https://github.com/kennymcmillan/aspire_data/actions/workflows/audit.yml/badge.svg)](https://github.com/kennymcmillan/aspire_data/actions/workflows/audit.yml)
+
 > Connection clients for every backing store Aspire apps talk to.
 > **Sibling of `aspire_dash`** — Dash frontend lib + this data layer = a complete
 > new-app stack in minutes.
@@ -88,7 +90,7 @@ aspire-data env           # which env vars are set (no values)
 Example output:
 
 ```
-  [OK  ] Connect base                       200 (https://posit.aspire.qa)
+  [OK  ] Connect base                       200 (https://your-connect-host)
   [OK  ] hana-api on Connect                /health OK
   [·   ] render-api on Connect              (env var not set — skipping)
   [OK  ] Sports API                         {'ok': True, 'version': '1.2.0'}
@@ -134,9 +136,9 @@ aspire_data @ git+https://github.com/kennymcmillan/aspire_data.git@main
 
 ## Public-safe rules
 
-- **No hardcoded hostnames** — every URL comes from an env var, with
-  the canonical public default (e.g. `qatar-sports-analytics.duckdns.org`)
-  used only where the URL is already public.
+- **No hardcoded hostnames** — every URL comes from an env var.
+  Even already-public hostnames (DuckDNS, Connect) are kept out of
+  the code so the repo audit stays trivially green.
 - **No keys / passwords in code** — `setup.py`, `tests/`, examples in
   `README.md` use placeholders only.
 - **No secrets in the test suite** — tests stub-out external calls.

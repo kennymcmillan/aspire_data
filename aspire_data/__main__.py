@@ -39,7 +39,9 @@ PROBES = [
 
 def _probe_connect() -> tuple[bool, str]:
     import httpx
-    base = os.environ.get("CONNECT_BASE_URL", "https://posit.aspire.qa").rstrip("/")
+    base = os.environ.get("CONNECT_BASE_URL", "").rstrip("/")
+    if not base:
+        return False, "CONNECT_BASE_URL not set"
     try:
         r = httpx.get(f"{base}/__ping__", timeout=10)
         return r.status_code < 500, f"{r.status_code} ({base})"

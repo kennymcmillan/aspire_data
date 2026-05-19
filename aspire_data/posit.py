@@ -4,14 +4,14 @@ Useful when debugging a deployed app or building deployment tooling.
 
 CONFIG (env)
 
-    CONNECT_BASE_URL   https://posit.aspire.qa     (default)
+    CONNECT_BASE_URL   https://<your-connect-host>
     CONNECT_API_KEY    <your Connect key>
 
 USAGE
 
     from aspire_data.posit import ConnectAdminClient
     pc = ConnectAdminClient()
-    content = pc.get_content("bbda9424-decb-4ff7-a3c5-1ad43f1b1490")
+    content = pc.get_content("<content-guid>")
     jobs = pc.list_jobs(content["guid"], count=5)
     log = pc.get_job_log(content["guid"], jobs[0]["key"])
     print(log)
@@ -24,7 +24,11 @@ import httpx
 
 
 def _base() -> str:
-    return os.environ.get("CONNECT_BASE_URL", "https://posit.aspire.qa").rstrip("/")
+    url = os.environ.get("CONNECT_BASE_URL", "").rstrip("/")
+    if not url:
+        raise RuntimeError(
+            "CONNECT_BASE_URL not set — set the URL of your Posit Connect server.")
+    return url
 
 
 class ConnectAdminClient:

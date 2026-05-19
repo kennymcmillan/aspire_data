@@ -11,7 +11,7 @@ and get a list back.
 
 CONFIG (env)
 
-    SPORTS_API_URL    https://qatar-sports-analytics.duckdns.org   (default)
+    SPORTS_API_URL    https://<your-sports-api-host>
     SPORTS_API_KEY    optional — Sports API itself is unauth'd for read tools
 
 USAGE
@@ -30,10 +30,11 @@ import httpx
 
 
 def _base() -> str:
-    return os.environ.get(
-        "SPORTS_API_URL",
-        "https://qatar-sports-analytics.duckdns.org",
-    ).rstrip("/")
+    url = os.environ.get("SPORTS_API_URL", "").rstrip("/")
+    if not url:
+        raise RuntimeError(
+            "SPORTS_API_URL not set — set your Sports API base URL.")
+    return url
 
 
 class SportsApi:

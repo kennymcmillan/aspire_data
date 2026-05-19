@@ -1,0 +1,52 @@
+name: public-safe audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime deps (for import-smoke)
+        run: |
+          python -m pip install --upgrade pip
+          pip install httpx python-dotenv truststore cachetools
+
+      - name: Run public-safe audit
+        # Fails the build if ANY denylisted string sneaks into the repo
+        # (internal hostnames, real Connect GUIDs, key fragments, etc).
+        run: python _audit.py
+
+      - name: Import-smoke every module
+        # Catches refactors that break import-time wiring before they
+        # land downstream.
+        env:
+          CONNECT_API_KEY: smoke-test
+          CONNECT_BASE_URL: https://example.com
+          SPORTS_API_URL: https://example.com
+          SAMS_BASE_URL: https://example.com
+          SAMS_CLIENT_ID: x
+          SAMS_CLIENT_SECRET: x
+          HETZNER_PROXY_BASE: https://example.com
+          HETZNER_PROXY_KEY: x
+        run: |
+          python -c "
+          import aspire_data
+          print('aspire_data', aspire_data.__version__)
+          from aspire_data import (
+              connect, sports_api, sams, oracle, aiven,
+              hetzner, hana, posit, ssl_fix,
+          )
+          print('all modules import cleanly')
+          "
