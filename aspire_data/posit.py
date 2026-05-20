@@ -18,6 +18,8 @@ USAGE
 """
 from __future__ import annotations
 
+__all__ = ['ConnectAdminClient']
+
 import os
 
 import httpx

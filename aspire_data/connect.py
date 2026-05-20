@@ -39,6 +39,8 @@ generic ConnectClient just needs the guid passed in.
 """
 from __future__ import annotations
 
+__all__ = ['ConnectClient', 'hana_sql', 'hana_view', 'render_pdf', 'render_doc', 'jobs_submit', 'jobs_get', 'jobs_wait', 'notify_send']
+
 import os
 from typing import Any
 

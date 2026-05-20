@@ -42,7 +42,12 @@ CLI
 """
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
+
+__all__ = [
+    "__version__",
+    "inject_truststore",
+]
 
 # Auto-load .env in the caller's CWD (if dotenv available)
 try:
@@ -54,5 +59,5 @@ except ImportError:
 # Auto-fix the Aspire MITM TLS chain — see ssl_fix.py for details.
 # Idempotent and silent; only effective on Aspire laptop / similar
 # corp-CA environments. No-op on properly-trusted Connect / VMs.
-from .ssl_fix import inject_truststore as _inject_truststore
-_inject_truststore()
+from .ssl_fix import inject_truststore
+inject_truststore()

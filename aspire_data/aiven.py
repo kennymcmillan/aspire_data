@@ -29,6 +29,8 @@ NOTES
 """
 from __future__ import annotations
 
+__all__ = ['aiven_postgres_conn', 'aiven_mysql_conn']
+
 import os
 from contextlib import contextmanager
 

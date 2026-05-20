@@ -20,6 +20,8 @@ Behavior:
 """
 from __future__ import annotations
 
+__all__ = ['inject_truststore']
+
 import os
 
 

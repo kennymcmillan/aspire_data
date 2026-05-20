@@ -33,6 +33,8 @@ USAGE
 """
 from __future__ import annotations
 
+__all__ = ['hana_sql_via_connect', 'hana_sql_direct', 'hana_sql_subprocess']
+
 import csv
 import io
 import os

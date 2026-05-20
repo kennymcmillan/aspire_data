@@ -2,6 +2,25 @@
 
 All notable changes to `aspire_data`.
 
+## [0.2.0] — 2026-05-20
+
+### Added
+- **`tests/`** — 46 pytest cases covering smoke imports, ConnectClient
+  + the 4 convenience wrappers, SportsApi (parameters envelope + records
+  unwrap), SamsClient (search + MRN cache + auth), Oracle pool URL
+  parser + env-required validation, Aiven env-required, Hetzner proxy
+  + direct mode, Posit admin, the CLI (env / status / status --json).
+  Stubs httpx via a recording mock — no live network calls.
+  **Run time: ~2 s.**
+- **`pyproject.toml`** — pytest config (testpaths, addopts).
+- **`__all__` exports** on every public module — clearer surface for
+  IDEs + cleaner `from aspire_data.X import *` semantics.
+- **CI matrix** — `.github/workflows/audit.yml` now runs the audit
+  AND the pytest suite on Python 3.10 / 3.11 / 3.12.
+
+### Changed
+- Bumped `__version__` to 0.2.0 across `__init__.py` + `setup.py`.
+
 ## [0.1.0] — 2026-05-20
 
 Initial release. Sibling of `aspire_dash` covering the data layer.

@@ -23,6 +23,8 @@ USAGE
 """
 from __future__ import annotations
 
+__all__ = ['SportsApi']
+
 import os
 from typing import Any
 

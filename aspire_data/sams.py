@@ -28,6 +28,8 @@ NOTES
 """
 from __future__ import annotations
 
+__all__ = ['SamsClient', 'SamsError', 'DEFAULT_SPORTS']
+
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
