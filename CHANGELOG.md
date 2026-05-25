@@ -2,6 +2,41 @@
 
 All notable changes to `aspire_data`.
 
+## [0.3.0] — 2026-05-25
+
+### Added — SAMS PlayerEnrollmentPeriods integration
+
+Promoted from the `DASH_Anthro` Connect app. Canonical way to get
+authoritative sport + discipline + competition event for an athlete.
+
+**New on `SamsClient`:**
+
+- `get_all_enrollment_periods() -> list[dict]` — fetches every row from
+  `/api/ExternalApps/PlayerEnrollmentPeriods` (1000+ rows, ~415 KB),
+  cached at the same TTL as the athlete-context cache (1h default).
+- `get_current_enrollment(player_id: int) -> dict` — picks the most
+  relevant **current** (endDate=None) enrollment for one player:
+  primary first, else most-recent `startDate`. Returns `{}` if none.
+- `get_athlete_context(player_id, *, enrich=False)` — new `enrich`
+  flag. When `True`, merges current enrollment data onto the returned
+  dict: `sport_id`, `sport`, `discipline_id`, `discipline`,
+  `target_event` (first non-TBD token of `targetEventNames`),
+  `target_event_raw`, `player_type`, `coach_name`. Default `False`
+  preserves the existing API for current callers.
+
+**New module-level helper:**
+
+- `first_target_event(raw: str | None) -> str | None` — splits a
+  comma-separated `targetEventNames` string, skips "TBD" tokens,
+  returns the first usable event.
+
+### Why
+
+The `/api/ExternalApps/player/{id}` endpoint doesn't reliably surface
+`sportId` for multi-sport athletes, and never surfaces the specific
+event (Foil/Epee/100m/Hammer Throw/etc). Enrollment periods are the
+authoritative source for both.
+
 ## [0.2.0] — 2026-05-20
 
 ### Added
