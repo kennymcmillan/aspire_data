@@ -8,6 +8,7 @@ import pytest
 # ---------- Oracle pools (env-only check; pools need real drivers) ----------
 
 def test_oracle_mysql_pool_requires_env(monkeypatch):
+    pytest.importorskip("aiomysql")  # pool imports the driver before the env check
     monkeypatch.delenv("ORACLE_MYSQL_URL", raising=False)
     from aspire_data.oracle import mysql_pool
     import asyncio
@@ -16,6 +17,7 @@ def test_oracle_mysql_pool_requires_env(monkeypatch):
 
 
 def test_oracle_postgres_pool_requires_env(monkeypatch):
+    pytest.importorskip("asyncpg")  # pool imports the driver before the env check
     monkeypatch.delenv("ORACLE_PG_URL", raising=False)
     from aspire_data.oracle import postgres_pool
     import asyncio
@@ -42,6 +44,7 @@ def test_oracle_mysql_url_default_port():
 # ---------- Aiven (env-only) ----------
 
 def test_aiven_postgres_requires_env(monkeypatch):
+    pytest.importorskip("psycopg")  # conn imports the driver before the env check
     monkeypatch.delenv("AIVEN_PG_URL", raising=False)
     from aspire_data.aiven import aiven_postgres_conn
     with pytest.raises(RuntimeError, match="AIVEN_PG_URL"):
@@ -50,6 +53,7 @@ def test_aiven_postgres_requires_env(monkeypatch):
 
 
 def test_aiven_mysql_requires_env(monkeypatch):
+    pytest.importorskip("pymysql")  # conn imports the driver before the env check
     monkeypatch.delenv("AIVEN_MYSQL_URL", raising=False)
     from aspire_data.aiven import aiven_mysql_conn
     with pytest.raises(RuntimeError, match="AIVEN_MYSQL_URL"):
