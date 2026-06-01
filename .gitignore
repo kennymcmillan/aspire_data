@@ -1,0 +1,24 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+
+# Environment files — secrets live here, never commit
+.env
+.env.local
+*.env.private
+
+# Audit denylist — holds real internal values for the specific-value scan.
+# NEVER commit; the audit loads it at runtime only.
+_audit_denylist.local
+
+# IDE
+.vscode/
+.idea/
+
+# Test caches
+.pytest_cache/
+.coverage
+htmlcov/
