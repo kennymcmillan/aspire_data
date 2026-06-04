@@ -2,6 +2,28 @@
 
 All notable changes to `aspire_data`.
 
+## [0.4.0] — 2026-06-04
+
+### Added — athlete identifier resolution + WHOOP / Firstbeat recall
+
+Promoted from the `aspire-nutrition` consultation module. Deterministic
+SAMS→device-id mapping (no name matching) + read-only wearable recalls.
+
+**New modules:**
+- `aspire_data.identifiers` — `resolve_ids(player_id=…, mrn=…)` returns the
+  `athlete_identifiers` row (whoop_id / firstbeat_id / vald_id / gymaware_id /
+  …); `device_id(row, field)` pulls one id, treating blank/0 as missing.
+- `aspire_data.whoop` — `whoop_summary(player_id=…, mrn=…)`: today's recovery /
+  HRV / RHR / strain / sleep + 7/30-day averages + daily series + sleep stages.
+  `recovery_zone_color()` helper.
+- `aspire_data.firstbeat` — `firstbeat_summary(player_id=…, mrn=…)`: last-week
+  sessions / duration / energy (kcal) / TRIMP load / aerobic-TE intensity /
+  ACWR + 14-day load series. `acwr_zone_color()` helper.
+
+All env-only config (`SPORTS_API_URL`, `INSECURE_API_TLS`); no hardcoded
+hosts/GUIDs. Resolve names (only if unavoidable) via the Sports API AI
+resolver, never a local fuzzy match.
+
 ## [0.3.0] — 2026-05-25
 
 ### Added — SAMS PlayerEnrollmentPeriods integration
