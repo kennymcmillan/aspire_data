@@ -2,6 +2,21 @@
 
 All notable changes to `aspire_data`.
 
+## [0.5.0] — 2026-06-04
+
+### Added — supplement inventory client (shared with aspire-supplements)
+
+`aspire_data.supplements` — read an athlete's supplement history and assign
+stock against the same Oracle tables the `aspire-supplements` app uses, with
+the over-issue guard built in (no re-implementing inventory maths):
+- `athlete_history(player_id=…)` — past assignments, newest first, with name
+- `products_on_hand()` — catalogue + remaining stock (received − assigned)
+- `assign(sams_player_id=…, product_id=…, quantity=…, …)` — writes an
+  assignment; raises `OverIssueError` when quantity exceeds on-hand
+  (override with `allow_negative=True`). Requires `SPORTS_WRITE_API_KEY`.
+- `fetch_products` / `fetch_receipts` / `fetch_assignments` / `on_hand`
+Env-only config (`SPORTS_API_URL`, `SPORTS_WRITE_API_KEY`).
+
 ## [0.4.0] — 2026-06-04
 
 ### Added — athlete identifier resolution + WHOOP / Firstbeat recall
