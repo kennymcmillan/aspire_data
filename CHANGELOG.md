@@ -2,6 +2,26 @@
 
 All notable changes to `aspire_data`.
 
+## [0.8.3] — 2026-06-10
+
+### Fixed — identity: same-year DOBs no longer count as strong evidence
+
+- `resolve_to_sams` auto-linked "Saleh Al-Sadi" (born 2004-06-15) to
+  "Saeed Salem Salem" (born 2004-11-29): the DOB gap was computed by **year
+  subtraction**, so any same-year pair scored gap 0, and the `:8080` engine's
+  phonetic over-score (Saleh≈Salem, 90) tipped it over the `ns>=88 & gap==0`
+  auto rule. Found during the Smartabase historical-data migration.
+- New `dob_relation(a, b)` implements Kenny's three-tier DOB ladder:
+  **exact date** > **day/month-swapped** (dd-mm vs mm-dd transposition — same
+  date through the other entry convention, now treated as strong evidence and
+  surfaced as `dob_swapped` in the candidate dict) > **fractional-year gap**
+  (real date arithmetic, so 2004-06-15 vs 2004-11-29 is gap 0.46, not 0).
+- Verdict changes: the `ns>=88` auto rule now requires exact/swapped DOB
+  (same-year alone falls to `review`); `ns>=92` auto now uses the real ≤1y
+  gap; swapped-DOB confidence bonus +14 (exact stays +18).
+- Regression tests: the Saleh case must be `review`, a dd-mm/mm-dd transposed
+  pair with a shared distinctive surname must auto-link.
+
 ## [0.8.2] — 2026-06-10
 
 ### Fixed — `firstbeat_summary` was DOA (NameError)

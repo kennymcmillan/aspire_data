@@ -83,6 +83,46 @@ def test_fetch_roster_maps_sams_fields():
                   "sport": "Swimming", "mrn": "1234", "photo_url": "u"}]
 
 
+def test_dob_relation_ladder():
+    from aspire_data.identity import dob_relation
+    assert dob_relation("2004-06-15", "2004-06-15") == ("exact", 0.0)
+    rel, gap = dob_relation("2010-03-07", "2010-07-03")       # dd-mm vs mm-dd entry
+    assert rel == "swapped"
+    rel, gap = dob_relation("2004-06-15", "2004-11-29")       # same year, different date
+    assert rel is None and 0.4 < gap < 0.5
+    assert dob_relation("2007-01-01", "2007-01-01")[0] is None  # placeholder never exact
+    assert dob_relation(None, "2004-06-15") == (None, None)
+
+
+def test_same_year_different_dob_phonetic_overscore_not_auto(monkeypatch):
+    """Regression: Saleh Al-Sadi (2004-06-15) was auto-linked to Saeed Salem Salem
+    (2004-11-29) because the year-granular gap was 0 and the :8080 engine scored
+    the names 90. Same-year-different-date must NOT be auto below ns 92."""
+    from aspire_data import identity
+    roster = [{"player_id": 3115, "full_name": "Saeed Salem Salem", "dob": "2004-11-29",
+               "sport": "Athletics", "photo_url": None, "mrn": None}]
+    monkeypatch.setattr(identity, "match_pairs", lambda pairs, **kw: {p: 90 for p in pairs})
+    res = identity.resolve_to_sams(
+        [{"name": "Saleh Al-Sadi", "dob": "2004-06-15", "sport": "Endurance"}],
+        roster=roster, use_match_api=True)[0]
+    assert res["player_id"] is None
+    assert res["verdict"] == "review"                         # human glance, not auto
+
+
+def test_swapped_day_month_counts_as_strong_dob(monkeypatch):
+    """dd-mm vs mm-dd transposition is the same date through the other convention:
+    with a shared distinctive surname it should auto-link (it didn't before)."""
+    from aspire_data import identity
+    roster = [{"player_id": 4001, "full_name": "Mohammed Khalid Bourenane", "dob": "2010-07-03",
+               "sport": "Athletics", "photo_url": None, "mrn": None}]
+    monkeypatch.setattr(identity, "match_pairs", lambda pairs, **kw: {p: 84 for p in pairs})
+    res = identity.resolve_to_sams(
+        [{"name": "Khalid Bourenane", "dob": "2010-03-07", "sport": "Athletics"}],
+        roster=roster, use_match_api=True)[0]
+    assert res["player_id"] == 4001 and res["verdict"] == "auto"
+    assert res["candidate"]["dob_swapped"] is True
+
+
 def test_match_api_is_the_scorer_when_enabled(monkeypatch):
     """When the :8080 engine is enabled it provides the authoritative name score
     (rapidfuzz only blocks). Mock it to confirm its score drives the verdict."""

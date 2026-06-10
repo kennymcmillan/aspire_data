@@ -20,9 +20,16 @@ sport agreement.
     # each result: {"key","name","player_id"(auto only),"verdict","confidence","candidate"}
 
 By default the active SAMS roster is fetched via :class:`aspire_data.sams.SamsClient`;
-pass ``roster=[...]`` to match offline / in tests. Verdicts:
-  auto    exact DOB + distinctive token (+sport ok), or name≥92 with DOB≤1y  → player_id set
-  reject  sport conflict (and DOB not exact), or age gap >2y (wrong person)
+pass ``roster=[...]`` to match offline / in tests.
+
+DOB evidence is a three-tier ladder (see :func:`dob_relation`): exact date >
+day/month-swapped (dd-mm vs mm-dd transposition counts as the same date) >
+fractional-year gap. Same-year-different-date is NO LONGER strong evidence —
+it used to produce false autos when the phonetic engine over-scored a name.
+
+Verdicts:
+  auto    exact/swapped DOB + distinctive token (+sport ok), or name≥92 with real gap ≤1y → player_id set
+  reject  sport conflict (and DOB not exact/swapped), or age gap >2y (wrong person)
   review  worth a human glance — candidate returned, player_id stays None
   no_match no candidate at all
 """
@@ -31,6 +38,7 @@ from __future__ import annotations
 import os
 import re
 from collections import defaultdict
+from datetime import date
 
 from rapidfuzz import fuzz, process
 
@@ -63,6 +71,37 @@ def name_tokens(s: str | None) -> set[str]:
 def is_placeholder_dob(dob: str | None) -> bool:
     """Jan-1 dates are almost always placeholders — don't trust as an exact match."""
     return bool(dob) and str(dob)[5:10] == "01-01"
+
+
+def dob_relation(a: str | None, b: str | None) -> tuple[str | None, float | None]:
+    """Compare two ISO yyyy-mm-dd DOBs the way messy sports data needs (Kenny's
+    ladder, 2026-06-10): **exact date first, then day/month transposition**
+    (dd-mm vs mm-dd entry — the same date through the other convention),
+    **then the real gap in fractional years** as the weakest signal.
+
+    The old year-subtraction gap let "born 2004-06-15" match "born 2004-11-29"
+    as gap 0, which combined with a phonetic name over-score produced false
+    autos (Saleh Al-Sadi -> Saeed Salem Salem).
+
+    Returns ``(relation, gap_years)`` where relation is 'exact', 'swapped' or
+    None, and gap_years is the absolute difference in years (float) or None
+    when either side is missing/invalid. Placeholder Jan-1 dates never count
+    as exact (and can't be swapped — day==month).
+    """
+    if not a or not b:
+        return None, None
+    a, b = str(a)[:10], str(b)[:10]
+    try:
+        ay, am, ad = int(a[:4]), int(a[5:7]), int(a[8:10])
+        by, bm, bd = int(b[:4]), int(b[5:7]), int(b[8:10])
+        gap = abs((date(ay, am, ad) - date(by, bm, bd)).days) / 365.25
+    except ValueError:
+        return None, None
+    if a == b:
+        return ("exact" if not is_placeholder_dob(a) else None), gap
+    if ay == by and am == bd and ad == bm and am != ad:
+        return "swapped", gap
+    return None, gap
 
 
 def _norm_sport(s: str | None) -> str | None:
@@ -215,32 +254,35 @@ def resolve_to_sams(athletes: list[dict], *, roster: list[dict] | None = None,
             shared = a_tokens & name_tokens(rn)
             distinct = {t for t in shared if t not in COMMON_FIRST}
             s_dob = str(r["dob"])[:10] if r.get("dob") else None
-            dob_exact = bool(a_dob and s_dob and a_dob == s_dob
-                             and not is_placeholder_dob(a_dob))
-            dob_gap = (abs(int(s_dob[:4]) - int(a_dob[:4]))
-                       if (a_dob and s_dob) else None)
+            # DOB ladder: exact > day/month-swapped > fractional-year gap.
+            rel, dob_gap = dob_relation(a_dob, s_dob)
+            dob_exact = rel == "exact"
+            dob_strong = rel in ("exact", "swapped")
             sp_ok = sport_agrees(a_sport, r.get("sport"))
 
-            if sp_ok is False and not dob_exact:
+            if sp_ok is False and not dob_strong:
                 verdict = "reject"
-            elif dob_exact and sp_ok is not False and (distinct or ns >= 85):
+            elif dob_strong and sp_ok is not False and (distinct or ns >= 85):
                 verdict = "auto"
             elif ns >= 92 and (dob_gap is None or dob_gap <= 1) and sp_ok is not False:
                 verdict = "auto"
-            elif ns >= 88 and dob_gap == 0 and sp_ok is not False:
+            elif ns >= 88 and dob_strong and sp_ok is not False:
                 verdict = "auto"
             elif dob_gap is not None and dob_gap > 2:
                 verdict = "reject"
-            elif dob_exact or ns >= 80 or (distinct and (dob_gap or 0) <= 1):
+            elif dob_strong or ns >= 80 or (distinct and (dob_gap or 0) <= 1):
                 verdict = "review"
             else:
                 verdict = "reject"
 
-            conf = min(100, ns + (18 if dob_exact else 0) + (6 if distinct else 0))
+            conf = min(100, ns + (18 if dob_exact else 14 if dob_strong else 0)
+                       + (6 if distinct else 0))
             cand = {
                 "player_id": r["player_id"], "sams_name": rn, "sams_dob": s_dob,
                 "sams_sport": r.get("sport"), "name_score": ns, "dob_exact": dob_exact,
-                "dob_gap": dob_gap, "shared_tokens": " ".join(sorted(shared)),
+                "dob_swapped": rel == "swapped",
+                "dob_gap": round(dob_gap, 2) if dob_gap is not None else None,
+                "shared_tokens": " ".join(sorted(shared)),
                 "sport_ok": sp_ok, "mrn": r.get("mrn"), "photo_url": r.get("photo_url"),
                 "verdict": verdict, "confidence": conf, "_rank": _RANK[verdict],
             }
