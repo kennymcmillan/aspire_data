@@ -35,7 +35,9 @@ import os
 from datetime import date, datetime
 from typing import Any
 
-import httpx
+from cachetools import TTLCache
+
+from aspire_data import _common
 
 PRODUCTS_TABLE = "nutrition_supplement_products"
 RECEIPTS_TABLE = "nutrition_supplement_receipts"
@@ -56,20 +58,15 @@ class OverIssueError(SupplementError):
     """Raised when an assignment would take stock below zero."""
 
 
-def _base() -> str:
-    url = os.environ.get("SPORTS_API_URL", "").rstrip("/")
-    if not url:
-        raise RuntimeError("SPORTS_API_URL not set — set your Sports API base URL.")
-    return url
-
-
-def _verify() -> bool:
-    return os.environ.get("INSECURE_API_TLS", "false").lower() not in ("1", "true", "yes")
+# 60s TTL on the three table reads — dropdowns re-render often, stock
+# changes rarely. assign() bypasses + invalidates (correctness first).
+_read_cache: TTLCache = TTLCache(maxsize=8, ttl=60)
+_common.register_cache(_read_cache)
 
 
 def _post(tool: str, **params: Any) -> dict:
-    r = httpx.post(f"{_base()}/api/tools/{tool}", json={"parameters": params},
-                   timeout=120.0, verify=_verify())
+    r = _common.post(f"/api/tools/{tool}", json={"parameters": params},
+                     timeout=120.0)
     r.raise_for_status()
     body = r.json()
     inner = body.get("result")
@@ -111,24 +108,33 @@ def _int(v):
 
 
 # ─── reads ─────────────────────────────────────────────────────────────────
-def fetch_products(active_only: bool = True) -> list[dict]:
-    rows = _query(PRODUCTS_TABLE)
+def _cached_query(table: str, *, fresh: bool = False) -> list[dict]:
+    if not fresh and table in _read_cache:
+        return _read_cache[table]
+    rows = _query(table)
+    _read_cache[table] = rows
+    return rows
+
+
+def fetch_products(active_only: bool = True, *, fresh: bool = False) -> list[dict]:
+    rows = _cached_query(PRODUCTS_TABLE, fresh=fresh)
     return [r for r in rows if _int(r.get("active")) in (1, None)] if active_only else rows
 
 
-def fetch_receipts() -> list[dict]:
-    return _query(RECEIPTS_TABLE)
+def fetch_receipts(*, fresh: bool = False) -> list[dict]:
+    return _cached_query(RECEIPTS_TABLE, fresh=fresh)
 
 
-def fetch_assignments() -> list[dict]:
-    return _query(ASSIGNMENTS_TABLE)
+def fetch_assignments(*, fresh: bool = False) -> list[dict]:
+    return _cached_query(ASSIGNMENTS_TABLE, fresh=fresh)
 
 
-def on_hand(product_id: int, receipts=None, assignments=None) -> float:
+def on_hand(product_id: int, receipts=None, assignments=None, *,
+            fresh: bool = False) -> float:
     """Remaining stock for a product = received − assigned."""
     pid = _int(product_id)
-    receipts = receipts if receipts is not None else fetch_receipts()
-    assignments = assignments if assignments is not None else fetch_assignments()
+    receipts = receipts if receipts is not None else fetch_receipts(fresh=fresh)
+    assignments = assignments if assignments is not None else fetch_assignments(fresh=fresh)
     recv = sum(_num(r.get("quantity")) for r in receipts if _int(r.get("product_id")) == pid)
     asgn = sum(_num(a.get("quantity")) for a in assignments if _int(a.get("product_id")) == pid)
     return recv - asgn
@@ -179,7 +185,8 @@ def assign(*, sams_player_id: int, product_id: int, quantity: float,
     if qty <= 0:
         raise SupplementError("Quantity must be greater than zero.")
     if not allow_negative:
-        avail = on_hand(product_id)
+        # fresh=True — the over-issue guard must never trust a cached read
+        avail = on_hand(product_id, fresh=True)
         if qty > avail:
             raise OverIssueError(
                 f"Only {avail:g} in stock — cannot assign {qty:g}.")
@@ -192,5 +199,7 @@ def assign(*, sams_player_id: int, product_id: int, quantity: float,
     cols = [k for k, v in row.items() if v is not None]
     vals = ", ".join(_sql_literal(row[c]) for c in cols)
     sql = f"INSERT INTO {ASSIGNMENTS_TABLE} ({', '.join(cols)}) VALUES ({vals})"
-    return _post("execute_write_sql", sql=sql,
-                 api_key=os.environ["SPORTS_WRITE_API_KEY"])
+    out = _post("execute_write_sql", sql=sql,
+                api_key=os.environ["SPORTS_WRITE_API_KEY"])
+    _read_cache.clear()  # the write changed stock — drop cached reads
+    return out

@@ -88,11 +88,11 @@ def test_hetzner_scrape_post(mock_httpx):
     from aspire_data.hetzner import HetznerClient
     h = HetznerClient()
     mock_httpx.instances[-1].set_response(json_body={"items": [1, 2, 3]})
-    out = h.scrape("/sports/fip/calendar", json={"year": 2024})
+    out = h.scrape("/fip/calendar", json={"year": 2024})
     assert out == {"items": [1, 2, 3]}
     method, path, kwargs = mock_httpx.instances[-1].calls[0]
     assert method == "POST"
-    assert path == "/sports/fip/calendar"
+    assert path == "/fip/calendar"
 
 
 def test_hetzner_scrape_get(mock_httpx):

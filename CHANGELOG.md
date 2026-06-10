@@ -2,6 +2,49 @@
 
 All notable changes to `aspire_data`.
 
+## [0.7.0] — 2026-06-10
+
+### Added — write-safe + REST surface on SportsApi (unblocks app migrations)
+
+- `SportsApi.tool_raw(name, **params)` — full envelope (ok / result.success /
+  rows_affected), for callers that need more than the records list.
+- `SportsApi.tool_write(name, **params)` — write tools with the inner-success
+  guard: the Sports API returns HTTP 200 even when a write FAILS; this raises
+  `SportsApiWriteError` on inner `success=False` (the silent-failure trap).
+- `SportsApi.table(name, where=, order_by=, desc=, limit=, offset=)` — the
+  generic `GET /api/v1/table/{name}` full-extraction surface with offset
+  pagination (what apps were hand-rolling; the `tool("query_table")` path is
+  the 20-row preview).
+- `aspire_data.motherduck.duckdb_conn()` recreated — was advertised in
+  `__init__` docstring + the `[duckdb]` extra but the module was lost in the
+  history rewrite. Lazy duckdb import; scratch-only / no-PII policy in docstring.
+
+### Changed — connection reuse + caching (perf)
+
+- New private `aspire_data/_common.py`: single home for `_base`/`_verify`/`_num`
+  (previously copy-pasted across 5 modules) + a shared, cached `httpx.Client`
+  for the Sports API. One athlete-card render used to cost 4 TLS handshakes.
+  (`supplements` keeps its own default-0.0 `_num` — its sums rely on it.)
+- `connect.py` convenience wrappers (`hana_sql`, `jobs_get`, `notify_send`, …)
+  now reuse a cached `ConnectClient` per GUID instead of opening + leaking a
+  fresh TLS connection per call (worst in `jobs_wait` poll loops).
+- `identifiers.resolve_ids` — 10-min TTL cache on the hottest path in the
+  package (called per athlete card by `whoop_summary`/`firstbeat_summary`).
+- `supplements` reads (`fetch_products/receipts/assignments`) — 60s TTL cache;
+  `assign()` bypasses the cache for the over-issue guard (`fresh=True`) and
+  invalidates after a successful write. Correctness over speed on the write path.
+- `aspire_data._common.reset_caches()` — clears cached clients + registered
+  TTL caches (tests / long-lived processes).
+
+### Fixed
+
+- `aspire-data status` was lying: render/jobs/notify-api probes were a dead
+  stub that printed OK without any HTTP. Now really probe `/health` per GUID.
+- Stale `/sports/fip/calendar` examples (route deleted 2026-04-27) updated to
+  the live `/fip/calendar` shape in hetzner.py, connect.py, README, tests.
+- `hana_sql_subprocess`: documented the hdbsql argv-password exposure and the
+  `hdbuserstore -U` migration path (single-user laptop path, unchanged).
+
 ## [0.6.0] — 2026-06-10
 
 ### Added — `identity` module: DOB-first name → SAMS resolution

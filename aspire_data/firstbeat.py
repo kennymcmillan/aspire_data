@@ -16,27 +16,15 @@ from __future__ import annotations
 
 __all__ = ["firstbeat_summary", "acwr_zone_color", "FirstbeatError"]
 
-import os
 from datetime import date, datetime, timedelta
 
-import httpx
-
+from aspire_data import _common
+from aspire_data._common import _num
 from aspire_data.identifiers import device_id, resolve_ids
 
 
 class FirstbeatError(Exception):
     pass
-
-
-def _base() -> str:
-    url = os.environ.get("SPORTS_API_URL", "").rstrip("/")
-    if not url:
-        raise RuntimeError("SPORTS_API_URL not set — set your Sports API base URL.")
-    return url
-
-
-def _verify() -> bool:
-    return os.environ.get("INSECURE_API_TLS", "false").lower() not in ("1", "true", "yes")
 
 
 def acwr_zone_color(acwr: float | None) -> str:

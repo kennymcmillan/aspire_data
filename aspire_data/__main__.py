@@ -18,9 +18,9 @@ PROBES = [
     # Connect APIs
     ("CONNECT_API_KEY", "Connect base", "_probe_connect"),
     ("HANA_API_GUID",   "hana-api on Connect", "_probe_hana_api"),
-    ("RENDER_API_GUID", "render-api on Connect", "_probe_connect_health"),
-    ("JOBS_API_GUID",   "jobs-api on Connect", "_probe_connect_health"),
-    ("NOTIFY_API_GUID", "notify-api on Connect", "_probe_connect_health"),
+    ("RENDER_API_GUID", "render-api on Connect", "_probe_render_api"),
+    ("JOBS_API_GUID",   "jobs-api on Connect", "_probe_jobs_api"),
+    ("NOTIFY_API_GUID", "notify-api on Connect", "_probe_notify_api"),
     # FastAPI / scraper layers
     ("SPORTS_API_URL",  "Sports API",   "_probe_sports_api"),
     ("HETZNER_PROXY_BASE", "Hetzner scraper (proxy)", "_probe_hetzner"),
@@ -49,8 +49,16 @@ def _probe_connect() -> tuple[bool, str]:
         return False, f"{type(e).__name__}: {e}"
 
 
-def _probe_connect_health() -> tuple[bool, str]:
-    return _probe_generic_guid("RENDER_API_GUID") if False else (True, "guid set")
+def _probe_render_api() -> tuple[bool, str]:
+    return _probe_generic_guid("RENDER_API_GUID")
+
+
+def _probe_jobs_api() -> tuple[bool, str]:
+    return _probe_generic_guid("JOBS_API_GUID")
+
+
+def _probe_notify_api() -> tuple[bool, str]:
+    return _probe_generic_guid("NOTIFY_API_GUID")
 
 
 def _probe_generic_guid(env_var: str) -> tuple[bool, str]:

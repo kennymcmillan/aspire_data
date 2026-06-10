@@ -55,7 +55,7 @@ rows = hana_sql("SELECT TOP 5 ATHLETE_ID FROM SAMS_VIEW")
 # Kick off a long-running scrape; auto-notifies Telegram on completion
 job_id = jobs_submit(
     "hetzner_proxy",
-    {"path": "/sports/fip/calendar"},
+    {"path": "/fip/calendar"},
     notify_target="telegram:kenny",
 )
 ```

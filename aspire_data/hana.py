@@ -90,6 +90,12 @@ def hana_sql_subprocess(sql: str, *, timeout: int = 60) -> list[dict]:
     pointing at the binary (typically inside the HDB Client install).
     """
     hdbsql = os.environ.get("HDBSQL_PATH", "hdbsql")
+    # SECURITY: hdbsql takes the password on argv (-p), which is visible
+    # in the process list while the subprocess runs. hdbsql has no env-var
+    # password option; the proper fix is an hdbuserstore key (-U <key>)
+    # created once with `hdbuserstore SET`. Acceptable here because this
+    # is the last-resort single-user laptop path — do NOT use this on a
+    # shared host without switching to -U.
     cmd = [
         hdbsql,
         "-A",  # ASCII

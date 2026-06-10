@@ -15,11 +15,10 @@ from __future__ import annotations
 
 __all__ = ["whoop_summary", "recovery_zone_color", "WhoopError"]
 
-import os
 from typing import Any
 
-import httpx
-
+from aspire_data import _common
+from aspire_data._common import _num
 from aspire_data.identifiers import device_id, resolve_ids
 
 REC_GREEN, REC_YELLOW, REC_RED = "#16a34a", "#fbb800", "#dc2626"
@@ -27,17 +26,6 @@ REC_GREEN, REC_YELLOW, REC_RED = "#16a34a", "#fbb800", "#dc2626"
 
 class WhoopError(Exception):
     pass
-
-
-def _base() -> str:
-    url = os.environ.get("SPORTS_API_URL", "").rstrip("/")
-    if not url:
-        raise RuntimeError("SPORTS_API_URL not set — set your Sports API base URL.")
-    return url
-
-
-def _verify() -> bool:
-    return os.environ.get("INSECURE_API_TLS", "false").lower() not in ("1", "true", "yes")
 
 
 def recovery_zone_color(score: float | None) -> str:
@@ -59,19 +47,11 @@ def _table(name: str, *, where: str | None = None, order_by: str | None = None,
         params["order_by"] = order_by
         params["desc"] = "true" if desc else "false"
     try:
-        r = httpx.get(f"{_base()}/api/v1/table/{name}", params=params,
-                      timeout=20.0, verify=_verify())
+        r = _common.get(f"/api/v1/table/{name}", params=params, timeout=20.0)
         r.raise_for_status()
         return r.json().get("data") or []
     except Exception as e:  # noqa: BLE001
         raise WhoopError(str(e)) from e
-
-
-def _num(v):
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
 
 
 def _avg(vals):

@@ -22,7 +22,7 @@ USAGE
 
     from aspire_data.hetzner import HetznerClient
     h = HetznerClient()
-    rows = h.scrape("/sports/fip/calendar", method="POST")
+    rows = h.scrape("/fip/calendar", method="POST")
     docs = h.scrape("/sniff", method="POST",
                      json={"url": "https://example.com"})
     health = h.health()
@@ -64,8 +64,8 @@ class HetznerClient:
                json: dict | None = None,
                params: dict | None = None) -> Any:
         """Hit any Hetzner endpoint. `path` is the part AFTER the
-        base URL (e.g. `/sports/fip/calendar`, `/sniff`, `/h2h`).
-        Returns the JSON body (parsed)."""
+        base URL (e.g. `/fip/calendar`, `/sniff`, `/h2h` — the proxy
+        base already ends in `/hetzner`). Returns the JSON body."""
         if method.upper() == "GET":
             r = self._client.get(path, params=params)
         else:

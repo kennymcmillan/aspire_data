@@ -22,7 +22,7 @@ Convenience wrappers for the 4 Aspire APIs (one-liner):
     from aspire_data.connect import hana_sql, render_pdf, jobs_submit, notify_send
     rows = hana_sql("SELECT TOP 5 ATHLETE FROM SAMS_VIEW WHERE ROWNUM<5")
     pdf  = render_pdf("<h1>Hello</h1>", css=".h1{color:red}")
-    jid  = jobs_submit("hetzner_proxy", {"path": "/sports/fip/calendar"})
+    jid  = jobs_submit("hetzner_proxy", {"path": "/fip/calendar"})
     notify_send("telegram:kenny", text="Build done")
 
 CONFIG (env, public-safe — set in your .env)
@@ -42,6 +42,7 @@ from __future__ import annotations
 __all__ = ['ConnectClient', 'hana_sql', 'hana_view', 'render_pdf', 'render_doc', 'jobs_submit', 'jobs_get', 'jobs_wait', 'notify_send']
 
 import os
+import threading
 from typing import Any
 
 import httpx
@@ -117,11 +118,25 @@ class ConnectClient:
 # Convenience wrappers for the 4 Aspire FastAPIs on Connect
 # ============================================================
 
+_client_cache: dict[tuple, ConnectClient] = {}
+_client_lock = threading.Lock()
+
+
 def _client_for(env_var: str) -> ConnectClient:
+    """Cached per (httpx class, env var, guid, base) — the convenience
+    wrappers used to open a fresh TCP+TLS connection on EVERY call
+    (worst in jobs_get poll loops) and leaked the socket. Keying on the
+    httpx.Client class id keeps test mocks isolated per test."""
     guid = os.environ.get(env_var)
     if not guid:
         raise RuntimeError(f"{env_var} not set — needed for this Aspire API call.")
-    return ConnectClient(guid)
+    key = (id(httpx.Client), env_var, guid, os.environ.get("CONNECT_BASE_URL", ""))
+    with _client_lock:
+        cli = _client_cache.get(key)
+        if cli is None:
+            cli = ConnectClient(guid)
+            _client_cache[key] = cli
+    return cli
 
 
 # ---- hana-api -----

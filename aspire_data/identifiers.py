@@ -9,6 +9,10 @@ deterministic id is genuinely missing, fill the mapping table — or, only if
 name resolution is unavoidable, call the Sports API AI resolver
 (`/api/athlete/resolve`), never a local fuzzy match.
 
+Lookups are TTL-cached (10 min) and ride the shared Sports-API client —
+this is the hottest path in the package (called once per athlete card
+per render by whoop_summary / firstbeat_summary).
+
 CONFIG (env)
     SPORTS_API_URL    https://<your-sports-api-host>
     INSECURE_API_TLS  optional — "true" on Aspire-laptop fallback only
@@ -22,29 +26,26 @@ from __future__ import annotations
 
 __all__ = ["resolve_ids", "device_id"]
 
-import os
 from typing import Any
 
-import httpx
+from cachetools import TTLCache
 
+from aspire_data import _common
 
-def _base() -> str:
-    url = os.environ.get("SPORTS_API_URL", "").rstrip("/")
-    if not url:
-        raise RuntimeError("SPORTS_API_URL not set — set your Sports API base URL.")
-    return url
-
-
-def _verify() -> bool:
-    return os.environ.get("INSECURE_API_TLS", "false").lower() not in ("1", "true", "yes")
+_id_cache: TTLCache = TTLCache(maxsize=2048, ttl=600)
+_common.register_cache(_id_cache)
 
 
 def _one(where: str) -> dict | None:
-    r = httpx.get(f"{_base()}/api/v1/table/athlete_identifiers",
-                  params={"where": where, "limit": 1}, timeout=15.0, verify=_verify())
+    if where in _id_cache:
+        return _id_cache[where]
+    r = _common.get("/api/v1/table/athlete_identifiers",
+                    params={"where": where, "limit": 1}, timeout=15.0)
     r.raise_for_status()
     rows = r.json().get("data") or []
-    return rows[0] if rows else None
+    row = rows[0] if rows else None
+    _id_cache[where] = row
+    return row
 
 
 def resolve_ids(*, player_id: int | str | None = None,

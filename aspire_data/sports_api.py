@@ -23,20 +23,26 @@ USAGE
 """
 from __future__ import annotations
 
-__all__ = ['SportsApi']
+__all__ = ['SportsApi', 'SportsApiError', 'SportsApiWriteError']
 
 import os
 from typing import Any
 
 import httpx
 
+from aspire_data._common import _base
 
-def _base() -> str:
-    url = os.environ.get("SPORTS_API_URL", "").rstrip("/")
-    if not url:
-        raise RuntimeError(
-            "SPORTS_API_URL not set — set your Sports API base URL.")
-    return url
+
+class SportsApiError(RuntimeError):
+    """Sports API returned an envelope-level failure."""
+
+
+class SportsApiWriteError(SportsApiError):
+    """Write tool returned HTTP 200 but inner result.success == False.
+
+    The Sports API write endpoints fail SILENTLY at the HTTP layer —
+    the outer status is just transport. Always check the inner result
+    (see feedback_oracle_write_api_quirks)."""
 
 
 class SportsApi:
@@ -69,6 +75,47 @@ class SportsApi:
         if isinstance(data, dict) and "records" in data:
             return data["records"]
         return data
+
+    def tool_raw(self, name: str, **params) -> dict:
+        """Like tool() but returns the FULL response body (envelope
+        included: ok / result.success / result.error / rows_affected).
+        Use when the caller needs more than the records list."""
+        r = self._client.post(f"/api/tools/{name}",
+                               json={"parameters": params})
+        r.raise_for_status()
+        return r.json()
+
+    def tool_write(self, name: str, **params) -> dict:
+        """Call a WRITE tool (execute_write_sql, bulk_insert,
+        upsert_records, ...) with the inner-success guard: the Sports
+        API returns HTTP 200 even when the write failed, so this
+        checks result.success and raises SportsApiWriteError on inner
+        failure. Returns the inner result dict on success."""
+        body = self.tool_raw(name, **params)
+        result = body.get("result") or {}
+        if isinstance(result, dict) and result.get("success") is False:
+            raise SportsApiWriteError(
+                f"{name}: {result.get('error') or result.get('message') or 'failed'}")
+        return result if isinstance(result, dict) else {"result": result}
+
+    def table(self, name: str, *, where: str | None = None,
+              order_by: str | None = None, desc: bool = False,
+              limit: int = 100, offset: int = 0) -> list[dict]:
+        """Read rows from the generic REST surface
+        `GET /api/v1/table/{name}` — the full-extraction path (no
+        20-row preview cap, supports offset pagination). Returns the
+        `data` list."""
+        params: dict[str, Any] = {"limit": limit}
+        if where:
+            params["where"] = where
+        if order_by:
+            params["order_by"] = order_by
+            params["desc"] = "true" if desc else "false"
+        if offset:
+            params["offset"] = offset
+        r = self._client.get(f"/api/v1/table/{name}", params=params)
+        r.raise_for_status()
+        return r.json().get("data") or []
 
     def openapi(self) -> dict:
         """Returns the OpenAPI spec — useful for tool discovery."""
