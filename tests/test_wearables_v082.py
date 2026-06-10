@@ -152,3 +152,42 @@ def test_whoop_summary_unmatched_no_id(mock_httpx):
     cli = mock_httpx.instances[-1]
     cli.set_response(json_body={"data": [{"sams_player_id": 2930}]})  # no whoop_id
     assert whoop.whoop_summary(player_id=2930) == {"matched": False}
+
+
+# ---------- resolve_ids priority/fallback + device_id (coverage moved up) ----------
+
+def test_device_id_treats_blank_zero_none_as_missing():
+    from aspire_data.identifiers import device_id
+    assert device_id(None, "whoop_id") is None
+    assert device_id({}, "whoop_id") is None
+    for blank in ("", "0", 0, "None", None):
+        assert device_id({"whoop_id": blank}, "whoop_id") is None
+    assert device_id({"whoop_id": "77"}, "whoop_id") == "77"
+
+
+def test_resolve_ids_prefers_player_id_then_falls_back_to_mrn(mock_httpx):
+    """player_id is tried first; a miss there falls back to MRN."""
+    from aspire_data import identifiers
+
+    class _Resp:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def json(self):
+            return {"data": self._rows}
+
+        def raise_for_status(self):
+            return self
+
+    _common.sports_client()
+    cli = mock_httpx.instances[-1]
+
+    def branch_get(path, **kw):
+        where = kw.get("params", {}).get("where", "")
+        if "sams_player_id" in where:
+            return _Resp([])                                    # miss on player_id
+        return _Resp([{"sams_mrn": "M1", "whoop_id": "9"}])     # hit on MRN
+    cli.get = branch_get
+
+    row = identifiers.resolve_ids(player_id=999, mrn="M1")
+    assert row["whoop_id"] == "9"                               # found via fallback
