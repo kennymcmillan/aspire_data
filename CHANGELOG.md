@@ -2,6 +2,33 @@
 
 All notable changes to `aspire_data`.
 
+## [0.9.0] — 2026-06-10
+
+### Added — `aspire_data.ingest`: the generic messy-data ingest lane
+
+Convergence of the two pipelines that independently grew the same machinery
+(DASH_Anthro `ingest/` and the Smartabase `historical_data/pipeline.py`).
+Domain parsers stay app-side; everything reusable now lives in one module:
+
+- `resolve_names_ladder(...)` — the proven 4-step identity ladder: exact join
+  (e.g. `athlete_identifiers.smartabase_name`) > profile-MRN → `sams_mrn` >
+  durable human decisions > `identity.resolve_to_sams` (DOB ladder) with
+  dob/sport hints. Plus `fetch_identifiers(api)` pager.
+- `DecisionLedger` — durable yes/no/drop human decisions CSV; re-runs and new
+  tables never re-ask (merges the anthro `decisions.json` and Smartabase
+  `manual_matches.csv` patterns).
+- `validate_ranges(df, rules)` — per-column physical-range nulling + report;
+  `flag_future_dates(df, col)` — the D/M/Y-swap dry-run guard from anthro.
+- `sanitize_col` / `infer_sql_type` / `build_ddl` — MySQL-safe columns with the
+  65KB-row-cap sizing rules and the literal-`ID`-column reserved-name guard;
+  standard identity/meta head (`row_uid` unique, `sams_*`, `match_*`).
+- `deterministic_id(*parts)` — uuid5 natural-key ids (idempotent upserts);
+  `chunked_upsert(api, table, records, key_columns=...)` — width-aware batches.
+- 8 tests in `tests/test_ingest_lane.py` (offline; fake api/roster).
+
+First consumer: `historical_data/pipeline.py` (Smartabase loads). Next:
+DASH_Anthro `ingest/` should delegate here the way its matcher already does.
+
 ## [0.8.3] — 2026-06-10
 
 ### Fixed — identity: same-year DOBs no longer count as strong evidence
