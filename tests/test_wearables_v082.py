@@ -118,3 +118,37 @@ def test_identifiers_by_mrn_maps_and_skips_blank(mock_httpx):
     m = identifiers.identifiers_by_mrn()
     assert set(m) == {"1520063"}
     assert m["1520063"]["sams_player_id"] == 2930
+
+
+# ---------- whoop_summary (coverage moved up from aspire-nutrition) ----------
+
+def test_whoop_summary_has_data(mock_httpx):
+    """One mocked row satisfies resolve_ids AND each _table read (recovery /
+    strain / sleep all read their own fields off the same body)."""
+    from aspire_data import whoop
+    _common.sports_client()
+    cli = mock_httpx.instances[-1]
+    cli.set_response(json_body={"data": [{
+        "whoop_id": "77", "sams_player_id": 2930, "whoop_name": "Test",
+        "recorded_date": "2026-06-08", "recovery_score": 80,
+        "hrv_rmssd_milli": 95, "resting_heart_rate": 48,
+        "strain": 12.5, "calories": 2500,
+        "total_sleep_mins": 440, "sleep_performance": 90,
+        "deep_sleep_mins": 90, "rem_sleep_mins": 110,
+        "light_sleep_mins": 230, "awake_mins": 10, "start_time": "2026-06-08T22:00",
+    }]})
+    s = whoop.whoop_summary(player_id=2930)
+    assert s["matched"] and s["has_data"]
+    assert s["whoop_user_id"] == 77
+    assert s["today"]["recovery"] == 80
+    assert s["today"]["strain"] == 12.5
+    assert s["today"]["sleep_mins"] == 440
+    assert s["sleep_stages"]["deep"] == 90
+
+
+def test_whoop_summary_unmatched_no_id(mock_httpx):
+    from aspire_data import whoop
+    _common.sports_client()
+    cli = mock_httpx.instances[-1]
+    cli.set_response(json_body={"data": [{"sams_player_id": 2930}]})  # no whoop_id
+    assert whoop.whoop_summary(player_id=2930) == {"matched": False}
