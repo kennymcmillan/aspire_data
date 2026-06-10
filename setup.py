@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="aspire_data",
-    version="0.5.0",
+    version="0.6.0",
     description=("Connection clients + helpers for every backing store every Aspire app talks to: "
                   "Posit Connect APIs, Sports API, SAMS, SAP HANA, Aiven, Oracle MySQL/Postgres, "
                   "Hetzner OpenClaw, MotherDuck. Auto-fixes the Aspire MITM TLS chain. "
@@ -17,6 +17,7 @@ setup(
         "python-dotenv>=1.0",
         "truststore>=0.10",
         "cachetools>=5.5",
+        "rapidfuzz>=3.0",
     ],
     extras_require={
         "mysql":      ["aiomysql>=0.2.0", "pymysql>=1.1"],

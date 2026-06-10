@@ -2,6 +2,28 @@
 
 All notable changes to `aspire_data`.
 
+## [0.6.0] — 2026-06-10
+
+### Added — `identity` module: DOB-first name → SAMS resolution
+
+`from aspire_data.identity import resolve_to_sams` — map a list of historical
+athletes (`{name, dob?, sport?}`) to SAMS player_ids.
+
+- **DOB-first**, not name-score-first. A long historical name ("Mohammed Aly
+  Abdelmonem Monsef Noufal") tanks the fuzzy name-score so the top name match is
+  often the WRONG person; an exact DOB + a distinctive (surname) token nails the
+  right one (Mohamed Noufal). The pool = rapidfuzz blocking **AND** every exact-DOB
+  roster athlete; verdict scores DOB + distinctive-token + sport.
+- **The `:8080` Sports API match engine is the authoritative scorer** (8-layer
+  alias/phonetic/Jaro-Winkler — handles Arabic transliteration variants); rapidfuzz
+  is only cheap blocking + offline fallback. Auto-used when `SPORTS_API_URL` is set;
+  `use_match_api=False` forces offline. `match_pairs()` exposed as the primitive.
+- Verdicts: `auto` (linked) / `review` / `reject` / `no_match`. Common first names
+  (Mohammed/Ahmed/Ali…) never auto-link on their own; Jan-1 DOBs treated as placeholders.
+- `fetch_roster()` pulls the active roster via `SamsClient` (empty search → full
+  roster). Adds `rapidfuzz>=3.0` dep. 9 tests in `tests/test_identity.py`.
+- Extracted from the DASH_Anthro anthropometry migration (`ingest/matcher.py`).
+
 ## [0.5.0] — 2026-06-04
 
 ### Added — supplement inventory client (shared with aspire-supplements)
