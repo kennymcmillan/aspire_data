@@ -117,6 +117,22 @@ class SportsApi:
         r.raise_for_status()
         return r.json().get("data") or []
 
+    def get(self, path: str, **params) -> Any:
+        """Raw GET passthrough for non-tools Sports API REST routes
+        (e.g. /api/fencing/competitions/search, /api/service/match).
+        Returns parsed JSON. Keeps auth/base/TLS handling here so apps
+        never hand-roll requests for these surfaces."""
+        r = self._client.get(path, params=params or None)
+        r.raise_for_status()
+        return r.json()
+
+    def post(self, path: str, json: dict | None = None, **kwargs) -> Any:
+        """Raw POST passthrough for non-tools REST routes. NOTE: no
+        envelope handling — for /api/tools/* use tool()/tool_write()."""
+        r = self._client.post(path, json=json, **kwargs)
+        r.raise_for_status()
+        return r.json()
+
     def openapi(self) -> dict:
         """Returns the OpenAPI spec — useful for tool discovery."""
         return self._client.get("/openapi.json").json()

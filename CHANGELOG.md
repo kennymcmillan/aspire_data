@@ -2,6 +2,17 @@
 
 All notable changes to `aspire_data`.
 
+## [0.8.1] — 2026-06-10
+
+### Added — raw REST passthrough on SportsApi
+
+- `SportsApi.get(path, **params)` / `SportsApi.post(path, json=...)` — for the
+  non-tools Sports API REST surfaces (`/api/fencing/*`, `/api/service/match`,
+  `/api/firstbeat/*`, ...). Auth/base-URL/TLS stay library-side; apps stop
+  hand-rolling `requests` for these routes. Unblocks the
+  DASH_Fencing_Reports_App migration (~30 call sites behind one `_get/_post`
+  seam) and gcc-games' `sams_loader` match endpoint.
+
 ## [0.8.0] — 2026-06-10
 
 ### Added — aspire-kb-api client (5th Connect FastAPI now covered)

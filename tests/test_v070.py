@@ -211,3 +211,24 @@ def test_render_probe_really_probes(mock_httpx):
     # an actual HTTP call happened (the old stub made none)
     assert any(c[1] == "/health" for inst in mock_httpx.instances
                for c in inst.calls)
+
+
+# ---------- v0.8.1: raw REST passthrough ----------
+
+def test_raw_get_passthrough(mock_httpx):
+    api, cli = _sports_api(mock_httpx)
+    cli.set_response(json_body={"competitions": [{"id": 9}]})
+    out = api.get("/api/fencing/competitions/search", q="GP", year=2026)
+    assert out["competitions"][0]["id"] == 9
+    method, path, kwargs = cli.calls[0]
+    assert (method, path) == ("GET", "/api/fencing/competitions/search")
+    assert kwargs["params"] == {"q": "GP", "year": 2026}
+
+
+def test_raw_post_passthrough(mock_httpx):
+    api, cli = _sports_api(mock_httpx)
+    cli.set_response(json_body={"matched": True})
+    out = api.post("/api/service/match", json={"name": "Noufal"})
+    assert out == {"matched": True}
+    method, path, kwargs = cli.calls[0]
+    assert (method, path) == ("POST", "/api/service/match")
