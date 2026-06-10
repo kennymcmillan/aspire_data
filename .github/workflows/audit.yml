@@ -25,7 +25,7 @@ jobs:
       - name: Install runtime + test deps
         run: |
           python -m pip install --upgrade pip
-          pip install httpx python-dotenv truststore cachetools
+          pip install .
           pip install pytest pandas
 
       - name: Run public-safe audit
