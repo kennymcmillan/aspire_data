@@ -144,6 +144,41 @@ def cmd_status(args):
         print(f"  [{mark:<4}] {r['label']:<35} {r['msg']}")
 
 
+def cmd_bump_pins(args):
+    from pathlib import Path
+    from .pins import LIBS, bump_file, current_shas, scan
+
+    base = args.base or str(Path.home() / "Documents" / "posit-deploys")
+    print(f"Resolving current main SHAs for {', '.join(LIBS)} ...")
+    shas = current_shas()
+    for lib, sha in shas.items():
+        print(f"  {lib:<14} {sha[:10]}")
+
+    rows = scan(base, shas)
+    if not rows:
+        print(f"No aspire-lib pins found under {base}")
+        return
+    drifted_files: dict[str, list[str]] = {}
+    print(f"\n  {'app':<28} {'lib':<14} {'pinned':<12} status")
+    for r in rows:
+        print(f"  {r['app']:<28} {r['lib']:<14} {r['ref'][:10]:<12} {r['status'].upper()}")
+        if r["status"] == "drift":
+            drifted_files.setdefault(r["file"], []).append(r["lib"])
+
+    n = sum(len(v) for v in drifted_files.values())
+    if not n:
+        print("\nAll exact-SHA pins are current.")
+        return
+    if not args.apply:
+        print(f"\n{n} drifted pin(s) in {len(drifted_files)} file(s). "
+              "Re-run with --apply to rewrite them (then test + redeploy each app).")
+        return
+    for f in drifted_files:
+        libs = bump_file(f, shas)
+        print(f"  bumped {', '.join(libs)} in {f}")
+    print(f"\nRewrote {n} pin(s). Next: run each app's tests, commit, redeploy.")
+
+
 def cmd_env(_args):
     print("aspire_data env vars (showing names + 'set'/'-'):")
     for env_var, label, _ in PROBES:
@@ -162,6 +197,14 @@ def main():
 
     e = sub.add_parser("env", help="Show which env vars are set (no values)")
     e.set_defaults(func=cmd_env)
+
+    b = sub.add_parser("bump-pins",
+                       help="Report (or --apply rewrite) aspire-lib SHA pin drift across deploy repos")
+    b.add_argument("--apply", action="store_true",
+                   help="Rewrite drifted exact-SHA pins to current main (default: report only)")
+    b.add_argument("--base", default=None,
+                   help="Root dir of app repos (default: ~/Documents/posit-deploys)")
+    b.set_defaults(func=cmd_bump_pins)
 
     args = parser.parse_args()
     if not args.command:

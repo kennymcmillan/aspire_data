@@ -2,6 +2,23 @@
 
 All notable changes to `aspire_data`.
 
+## [0.11.0] — 2026-06-10
+
+### Added — `aspire-data bump-pins`: lib SHA-pin drift report + rewrite
+
+Apps pin `aspire_dash`/`aspire_data` to exact commit SHAs (deploy-what-you-
+tested), so a library release does nothing until each pin is bumped — a
+redeploy silently rebuilds with the old SHA (bit us 2026-06-10: SamsClient
+retry shipped in 0.10.0 but apps rebuilt with 0.8.3). New `aspire_data.pins`
+module + CLI subcommand:
+
+- `aspire-data bump-pins` — resolve current main SHAs via `git ls-remote`,
+  scan `<base>/*/requirements*.txt`, report ok / drift / branch per pin.
+- `aspire-data bump-pins --apply` — rewrite drifted exact-SHA pins to current
+  main. Branch refs (`@main`) and current pins are never touched. Then test,
+  commit, redeploy each app.
+- `--base DIR` overrides the default `~/Documents/posit-deploys` root.
+
 ## [0.10.0] — 2026-06-10
 
 ### Added — SamsClient 5xx/transport auto-retry
