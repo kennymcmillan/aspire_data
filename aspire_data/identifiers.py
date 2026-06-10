@@ -24,7 +24,7 @@ USAGE
 """
 from __future__ import annotations
 
-__all__ = ["resolve_ids", "device_id"]
+__all__ = ["resolve_ids", "device_id", "all_identifiers", "identifiers_by_mrn"]
 
 from typing import Any
 
@@ -32,8 +32,11 @@ from cachetools import TTLCache
 
 from aspire_data import _common
 
-_id_cache: TTLCache = TTLCache(maxsize=2048, ttl=600)
+_id_cache: TTLCache = TTLCache(maxsize=2048, ttl=600)        # per-where, 10 min
 _common.register_cache(_id_cache)
+
+_all_cache: TTLCache = TTLCache(maxsize=1, ttl=3600)         # whole table, 1 h
+_common.register_cache(_all_cache)
 
 
 def _one(where: str) -> dict | None:
@@ -73,3 +76,28 @@ def device_id(row: dict | None, field: str) -> Any:
     if v in (None, "", "0", 0, "None"):
         return None
     return v
+
+
+def all_identifiers() -> list[dict]:
+    """The whole athlete_identifiers table (cached 1 h). For bulk lookups —
+    one fetch instead of one resolve_ids() per athlete (e.g. a roster grid or
+    an MRN-keyed dashboard)."""
+    if "rows" in _all_cache:
+        return _all_cache["rows"]
+    try:
+        r = _common.get("/api/v1/table/athlete_identifiers",
+                        params={"limit": 5000}, timeout=25.0)
+        r.raise_for_status()
+        rows = r.json().get("data") or []
+    except Exception:  # noqa: BLE001
+        rows = []
+    _all_cache["rows"] = rows
+    return rows
+
+
+def identifiers_by_mrn() -> dict[str, dict]:
+    """``{sams_mrn(str): identifiers row}`` — deterministic lookup keyed by
+    MRN, for data that is itself MRN-keyed (e.g. a diary dashboard) and needs
+    name / sport / player_id without a per-row API call."""
+    return {str(r.get("sams_mrn")): r for r in all_identifiers()
+            if r.get("sams_mrn") not in (None, "")}

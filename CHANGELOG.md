@@ -2,6 +2,32 @@
 
 All notable changes to `aspire_data`.
 
+## [0.8.2] — 2026-06-10
+
+### Fixed — `firstbeat_summary` was DOA (NameError)
+
+- `aspire_data.firstbeat.firstbeat_summary` called `httpx.get(f"{_base()}…",
+  verify=_verify())` but the module imported none of `httpx` / `_base` /
+  `_verify` — so it raised `NameError` the instant an id resolved. No test
+  covered it, so it shipped broken in 0.4.0. Now routes through `_common.get`
+  (the same shared, cached client `whoop.py` uses) and drops a duplicate local
+  `_num`. Any consumer that imported it (e.g. a wearable recall panel) was
+  getting a hard crash — this is the fix.
+
+### Added — nutrition-recall helpers promoted from aspire-nutrition
+
+- `aspire_data.firstbeat.firstbeat_ee_by_slot(player_id|mrn, start, end)` →
+  `{(date_iso, 'AM'|'PM'): kcal}`, mapping measured energy expenditure onto a
+  SAMS training-plan grid. Includes the **AM-default `_ampm` fix**: a blank/
+  unparseable session start time buckets to **AM** (morning training is the
+  norm), not PM — the old PM default dumped a whole day's EE into the PM column.
+- `aspire_data.identifiers.all_identifiers()` (whole table, 1 h cache) +
+  `identifiers_by_mrn()` ({sams_mrn: row}) — bulk lookups for roster grids /
+  MRN-keyed dashboards without a resolve_ids() per athlete.
+
+8 new hermetic tests (`tests/test_wearables_v082.py`) — the regression that
+would have caught the firstbeat bug, plus AM/PM parsing + cache behaviour.
+
 ## [0.8.1] — 2026-06-10
 
 ### Added — raw REST passthrough on SportsApi

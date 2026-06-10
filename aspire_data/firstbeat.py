@@ -14,7 +14,8 @@ USAGE
 """
 from __future__ import annotations
 
-__all__ = ["firstbeat_summary", "acwr_zone_color", "FirstbeatError"]
+__all__ = ["firstbeat_summary", "firstbeat_ee_by_slot",
+           "acwr_zone_color", "FirstbeatError"]
 
 from datetime import date, datetime, timedelta
 
@@ -37,13 +38,6 @@ def acwr_zone_color(acwr: float | None) -> str:
     return "#fbb800"
 
 
-def _num(v):
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
-
-
 def _pdate(s):
     try:
         return datetime.strptime(str(s)[:10], "%Y-%m-%d").date()
@@ -64,10 +58,10 @@ def firstbeat_summary(*, player_id=None, mrn=None, days: int = 28,
     to_d = today or date.today()
     fr_d = to_d - timedelta(days=days)
     try:
-        r = httpx.get(f"{_base()}/api/firstbeat/sessions",
-                      params={"athlete_id": str(fid), "from_date": fr_d.isoformat(),
-                              "to_date": to_d.isoformat(), "limit": 200},
-                      timeout=20.0, verify=_verify())
+        r = _common.get("/api/firstbeat/sessions",
+                        params={"athlete_id": str(fid), "from_date": fr_d.isoformat(),
+                                "to_date": to_d.isoformat(), "limit": 200},
+                        timeout=20.0)
         r.raise_for_status()
         sessions = r.json().get("sessions") or []
     except Exception as e:  # noqa: BLE001
@@ -105,3 +99,47 @@ def firstbeat_summary(*, player_id=None, mrn=None, days: int = 28,
             "last7": _agg(last7), "last28": _agg(rows), "acwr": latest_acwr,
             "load_series": series,
             "latest_date": rows[0]["date"].isoformat() if rows else None}
+
+
+def firstbeat_ee_by_slot(*, player_id=None, mrn=None,
+                         start: str | None = None, end: str | None = None) -> dict:
+    """Map Firstbeat sessions to training-calendar cells:
+    ``{(date_iso, 'AM'|'PM'): total_calories}``. AM/PM from the session
+    ``startTime`` (< 12:00 = AM). Empty dict if no firstbeat_id / no data /
+    no window. Used to overlay measured energy expenditure onto a SAMS
+    training-plan grid (one source of the nutrition consultation recall)."""
+    row = resolve_ids(player_id=player_id, mrn=mrn)
+    fid = device_id(row, "firstbeat_id")
+    if fid is None or not start or not end:
+        return {}
+    try:
+        r = _common.get("/api/firstbeat/sessions",
+                        params={"athlete_id": str(fid), "from_date": start,
+                                "to_date": end, "limit": 200}, timeout=20.0)
+        r.raise_for_status()
+        sessions = r.json().get("sessions") or []
+    except Exception:  # noqa: BLE001
+        return {}
+    out: dict = {}
+    for s in sessions:
+        d = str(s.get("date") or "")[:10]
+        kcal = _num(s.get("calories"))
+        if not d or not kcal:
+            continue
+        slot = _ampm(s.get("startTime"))
+        out[(d, slot)] = out.get((d, slot), 0) + kcal
+    return out
+
+
+def _ampm(start_time) -> str:
+    """Bucket a session start time into AM/PM. Accepts 'HH:MM', 'HH:MM:SS'
+    and ISO 'YYYY-MM-DDTHH:MM[:SS]'. Defaults to AM when the time is missing
+    or unparseable (morning training is the norm for these squads, and the
+    calendar reconciles against the SAMS plan slot anyway) — an earlier
+    version defaulted blank times to PM, which dumped a whole day's EE into
+    the PM column even when every scheduled session was AM."""
+    st = str(start_time or "")
+    clock = st.split("T", 1)[1] if "T" in st else st
+    if len(clock) >= 2 and clock[:2].isdigit():
+        return "PM" if int(clock[:2]) >= 12 else "AM"
+    return "AM"
