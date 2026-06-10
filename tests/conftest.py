@@ -101,8 +101,15 @@ def mock_httpx(monkeypatch):
         def set_response(self, **kwargs):
             self._next_response = FakeResponse(**kwargs)
 
+        def set_response_sequence(self, *kwargs_list):
+            """Queue responses returned in order; falls back to _next_response
+            when the queue is empty (for retry tests)."""
+            self._response_queue = [FakeResponse(**k) for k in kwargs_list]
+
         def get(self, path, **kwargs):
             self.calls.append(("GET", path, kwargs))
+            if getattr(self, "_response_queue", None):
+                return self._response_queue.pop(0)
             return self._next_response
 
         def post(self, path, **kwargs):

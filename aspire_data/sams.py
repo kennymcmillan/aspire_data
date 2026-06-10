@@ -31,6 +31,7 @@ from __future__ import annotations
 __all__ = ['SamsClient', 'SamsError', 'DEFAULT_SPORTS', 'first_target_event']
 
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 
@@ -72,13 +73,17 @@ class SamsClient:
                  timeout: float = 20.0,
                  cache_ttl: int = 3600,        # 1 h athlete context cache
                  roster_cache_ttl: int = 1800,  # 30 min sport-roster cache
-                 max_workers: int = 10):
+                 max_workers: int = 10,
+                 retries: int = 3,             # extra attempts on 5xx/transport errors
+                 retry_backoff: float = 0.5):  # 0.5s, 1s, 2s between attempts
         self.base_url = (base_url or os.environ.get("SAMS_BASE_URL", "")).rstrip("/")
         if not self.base_url:
             raise SamsError("SAMS_BASE_URL not set")
         self.client_id     = client_id     or os.environ["SAMS_CLIENT_ID"]
         self.client_secret = client_secret or os.environ["SAMS_CLIENT_SECRET"]
         self.sports = sports or DEFAULT_SPORTS
+        self.retries = max(0, int(retries))
+        self.retry_backoff = retry_backoff
 
         self._client = httpx.Client(
             base_url=self.base_url, timeout=timeout,
@@ -102,10 +107,27 @@ class SamsClient:
 
     # ---- low-level GET ----
     def _get(self, path: str, params: dict | None = None):
-        r = self._client.get(path, params=params)
-        if r.status_code >= 400:
-            raise SamsError(f"SAMS {r.status_code} on {path}: {r.text[:200]}")
-        return r.json()
+        """All SAMS traffic is GET (idempotent), so 5xx and transport errors
+        retry with exponential backoff — urllib3.Retry semantics, which the
+        old per-app requests Sessions used to provide. 4xx never retries."""
+        last_err: Exception | None = None
+        for attempt in range(self.retries + 1):
+            if attempt:
+                time.sleep(self.retry_backoff * (2 ** (attempt - 1)))
+            try:
+                r = self._client.get(path, params=params)
+            except httpx.TransportError as e:
+                last_err = e
+                continue
+            if r.status_code >= 500:
+                last_err = SamsError(f"SAMS {r.status_code} on {path}: {r.text[:200]}")
+                continue
+            if r.status_code >= 400:
+                raise SamsError(f"SAMS {r.status_code} on {path}: {r.text[:200]}")
+            return r.json()
+        raise SamsError(
+            f"SAMS GET {path} failed after {self.retries + 1} attempts: {last_err}"
+        ) from last_err
 
     # ---- search / lookup ----
     def search(self, q: str) -> list[dict]:

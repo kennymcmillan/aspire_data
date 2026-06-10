@@ -66,3 +66,60 @@ def test_default_sports_dict_present():
     from aspire_data.sams import DEFAULT_SPORTS
     assert DEFAULT_SPORTS[1] == "Athletics"
     assert "Padel" in DEFAULT_SPORTS.values()
+
+
+# ---- 5xx / transport retry (urllib3-Retry semantics restored) ----
+
+def test_get_retries_5xx_then_succeeds(mock_httpx):
+    from aspire_data.sams import SamsClient
+    s = SamsClient(retry_backoff=0)
+    inst = mock_httpx.instances[-1]
+    inst.set_response_sequence(
+        {"status_code": 503, "content": b"upstream sad"},
+        {"status_code": 502, "content": b"still sad"},
+        {"status_code": 200, "json_body": [{"playerId": 1}]},
+    )
+    out = s.search("x")
+    assert out == [{"playerId": 1}]
+    assert len(inst.calls) == 3
+
+
+def test_get_4xx_never_retries(mock_httpx):
+    from aspire_data.sams import SamsClient, SamsError
+    import pytest
+    s = SamsClient(retry_backoff=0)
+    inst = mock_httpx.instances[-1]
+    inst.set_response_sequence({"status_code": 404, "content": b"nope"})
+    with pytest.raises(SamsError, match="404"):
+        s._get("/api/ExternalApps/player/0")
+    assert len(inst.calls) == 1
+
+
+def test_get_raises_after_retries_exhausted(mock_httpx):
+    from aspire_data.sams import SamsClient, SamsError
+    import pytest
+    s = SamsClient(retries=2, retry_backoff=0)
+    inst = mock_httpx.instances[-1]
+    inst.set_response(status_code=500, content=b"perma-broken")
+    with pytest.raises(SamsError, match="failed after 3 attempts"):
+        s._get("/api/ExternalApps/player/search")
+    assert len(inst.calls) == 3
+
+
+def test_get_retries_transport_errors(mock_httpx):
+    import httpx
+    from aspire_data.sams import SamsClient
+    s = SamsClient(retry_backoff=0)
+    inst = mock_httpx.instances[-1]
+    real_get, state = inst.get, {"n": 0}
+
+    def flaky_get(path, **kw):
+        state["n"] += 1
+        if state["n"] == 1:
+            raise httpx.ConnectError("boom")
+        return real_get(path, **kw)
+
+    inst.get = flaky_get
+    inst.set_response(json_body={"ok": True})
+    assert s._get("/api/ExternalApps/player/1") == {"ok": True}
+    assert state["n"] == 2

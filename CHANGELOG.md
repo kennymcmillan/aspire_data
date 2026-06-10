@@ -2,6 +2,17 @@
 
 All notable changes to `aspire_data`.
 
+## [0.10.0] — 2026-06-10
+
+### Added — SamsClient 5xx/transport auto-retry
+
+`SamsClient` now retries GETs on 5xx responses and httpx transport errors
+with exponential backoff (`retries=3`, `retry_backoff=0.5` → 0.5s/1s/2s),
+restoring the urllib3.Retry semantics the per-app requests Sessions provided
+before the wiring sweep delegated transport here (sams-attendance-dashboard
+was the app that lost it). 4xx never retries; all SAMS traffic is GET so the
+retry is idempotent-safe. Both knobs are constructor kwargs.
+
 ## [0.9.0] — 2026-06-10
 
 ### Added — `aspire_data.ingest`: the generic messy-data ingest lane
