@@ -2,6 +2,24 @@
 
 All notable changes to `aspire_data`.
 
+## [0.8.0] — 2026-06-10
+
+### Added — aspire-kb-api client (5th Connect FastAPI now covered)
+
+- `aspire_data.aspire_kb` — `kb_search()` (POST /retrieve: hybrid/vector/bm25,
+  opt-in rewrite / multi_query_n / hyde / rerank), `kb_sources()`, `kb_stats()`,
+  `kb_document(doc_id)`. Pure HTTP — embedding + cross-encoder stay server-side,
+  no PyTorch in consumer apps. Env: `ASPIRE_KB_API_GUID` (+ shared CONNECT_*).
+- `aspire-data status` now probes aspire-kb-api `/health` alongside the other
+  four Connect APIs.
+- `.env.example` + test stub env gained `ASPIRE_KB_API_GUID`.
+
+### Fixed
+
+- `__init__` docstring: removed stale `NUTRITION_API_URL`/`NUTRITION_API_KEY`
+  (no such client exists — leftovers from the nutrition extraction); env list
+  now matches `.env.example` exactly, including the per-service Connect GUIDs.
+
 ## [0.7.0] — 2026-06-10
 
 ### Added — write-safe + REST surface on SportsApi (unblocks app migrations)

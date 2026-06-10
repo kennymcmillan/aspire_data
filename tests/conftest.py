@@ -18,6 +18,7 @@ _STUB_ENV = {
     "RENDER_API_GUID":    "stub-render-guid",
     "JOBS_API_GUID":      "stub-jobs-guid",
     "NOTIFY_API_GUID":    "stub-notify-guid",
+    "ASPIRE_KB_API_GUID": "stub-kb-guid",
 
     "SPORTS_API_URL":     "https://sports.example.com",
     "SPORTS_API_KEY":     "stub-sports-key",

@@ -21,6 +21,7 @@ PROBES = [
     ("RENDER_API_GUID", "render-api on Connect", "_probe_render_api"),
     ("JOBS_API_GUID",   "jobs-api on Connect", "_probe_jobs_api"),
     ("NOTIFY_API_GUID", "notify-api on Connect", "_probe_notify_api"),
+    ("ASPIRE_KB_API_GUID", "aspire-kb-api on Connect", "_probe_aspire_kb"),
     # FastAPI / scraper layers
     ("SPORTS_API_URL",  "Sports API",   "_probe_sports_api"),
     ("HETZNER_PROXY_BASE", "Hetzner scraper (proxy)", "_probe_hetzner"),
@@ -59,6 +60,10 @@ def _probe_jobs_api() -> tuple[bool, str]:
 
 def _probe_notify_api() -> tuple[bool, str]:
     return _probe_generic_guid("NOTIFY_API_GUID")
+
+
+def _probe_aspire_kb() -> tuple[bool, str]:
+    return _probe_generic_guid("ASPIRE_KB_API_GUID")
 
 
 def _probe_generic_guid(env_var: str) -> tuple[bool, str]:

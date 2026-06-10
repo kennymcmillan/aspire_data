@@ -1,9 +1,9 @@
-"""aspire_data — universal data-layer companion for Aspire Academy Dash + report apps."""
+﻿"""aspire_data â€” universal data-layer companion for Aspire Academy Dash + report apps."""
 from setuptools import setup, find_packages
 
 setup(
     name="aspire_data",
-    version="0.7.0",
+    version="0.8.0",
     description=("Connection clients + helpers for every backing store every Aspire app talks to: "
                   "Posit Connect APIs, Sports API, SAMS, SAP HANA, Aiven, Oracle MySQL/Postgres, "
                   "Hetzner OpenClaw, MotherDuck. Auto-fixes the Aspire MITM TLS chain. "

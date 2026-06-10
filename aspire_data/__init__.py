@@ -21,6 +21,8 @@ Then grab whichever client(s) your app needs:
     from aspire_data.hana import hana_sql_via_connect, hana_subprocess
     from aspire_data.motherduck import duckdb_conn
     from aspire_data.posit import ConnectAdminClient
+    from aspire_data.aspire_kb import kb_search, kb_sources, kb_stats
+    from aspire_data.identity import resolve_to_sams
 
 Most clients read env vars on construction. Pattern:
 
@@ -29,12 +31,13 @@ Most clients read env vars on construction. Pattern:
 
 CONFIG via env (see .env.example):
 
-    NUTRITION_API_URL     SPORTS_API_URL     CONNECT_API_KEY
-    NUTRITION_API_KEY     SAMS_BASE_URL      HETZNER_PROXY_KEY
-    SAMS_CLIENT_ID        SAMS_CLIENT_SECRET HETZNER_SCRAPER_KEY
-    AIVEN_PG_URL          AIVEN_MYSQL_URL    ORACLE_MYSQL_URL
-    ORACLE_PG_URL         HANA_API_GUID      MOTHERDUCK_TOKEN
-    INSECURE_API_TLS      (true on Aspire laptop fallback only)
+    CONNECT_BASE_URL      CONNECT_API_KEY    SPORTS_API_URL
+    HANA_API_GUID         RENDER_API_GUID    JOBS_API_GUID
+    NOTIFY_API_GUID       ASPIRE_KB_API_GUID SPORTS_API_KEY
+    SAMS_BASE_URL         SAMS_CLIENT_ID     SAMS_CLIENT_SECRET
+    HETZNER_PROXY_BASE    HETZNER_PROXY_KEY  ORACLE_MYSQL_URL
+    AIVEN_PG_URL          AIVEN_MYSQL_URL    ORACLE_PG_URL
+    MOTHERDUCK_TOKEN      INSECURE_API_TLS   (laptop fallback only)
 
 CLI
 
@@ -42,7 +45,7 @@ CLI
 """
 from __future__ import annotations
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 __all__ = [
     "__version__",
