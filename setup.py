@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="aspire_data",
-    version="0.11.0",
+    version="0.12.0",
     description=("Connection clients + helpers for every backing store every Aspire app talks to: "
                   "Posit Connect APIs, Sports API, SAMS, SAP HANA, Aiven, Oracle MySQL/Postgres, "
                   "Hetzner OpenClaw, MotherDuck. Auto-fixes the Aspire MITM TLS chain. "
@@ -24,10 +24,12 @@ setup(
         "postgres":   ["asyncpg>=0.29", "psycopg[binary]>=3.2"],
         "hana":       ["hdbcli>=2.20"],
         "duckdb":     ["duckdb>=1.1"],
+        "pins":       ["pins>=0.8", "pandas>=2.0"],
         "all": [
             "aiomysql>=0.2.0", "pymysql>=1.1",
             "asyncpg>=0.29", "psycopg[binary]>=3.2",
             "duckdb>=1.1",
+            "pins>=0.8", "pandas>=2.0",
         ],
     },
     entry_points={

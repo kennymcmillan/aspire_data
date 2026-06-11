@@ -23,6 +23,7 @@ Then grab whichever client(s) your app needs:
     from aspire_data.posit import ConnectAdminClient
     from aspire_data.aspire_kb import kb_search, kb_sources, kb_stats
     from aspire_data.identity import resolve_to_sams
+    from aspire_data.pinboard import publish_dataframe, read_pin
 
 Most clients read env vars on construction. Pattern:
 
@@ -45,7 +46,7 @@ CLI
 """
 from __future__ import annotations
 
-__version__ = "0.11.0"
+__version__ = "0.12.0"
 
 __all__ = [
     "__version__",

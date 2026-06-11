@@ -2,6 +2,28 @@
 
 All notable changes to `aspire_data`.
 
+## [0.12.0] — 2026-06-11
+
+### Added — `aspire_data.pinboard`: Posit Connect pins (org CSV sharing)
+
+Publish/read versioned datasets as Connect pins — the org-internal sharing
+layer (colleagues read via Python/R/browser with their existing Connect
+logins). Whole-file + last-write-wins, so it is a distribution layer over a
+real store (Oracle), never an app's primary database.
+
+- `publish_dataframe(df, name, title=..., type="csv")` — write/refresh a pin;
+  each call is a new version. Bare names are auto-prefixed with the API key
+  owner's Connect username (Connect rejects cross-owner writes — the exact
+  username, e.g. `Kenneth.Mcmillan@ASPIRE.QA`, is resolved via
+  `/__api__/v1/user` and cached).
+- `read_pin(name, version=None)` — latest (or pinned-version) read-back.
+- `pin_board()` / `full_pin_name()` for direct `pins` access.
+- Optional dep: `pip install aspire_data[pins]`. Named `pinboard` (not
+  `pins`) to avoid colliding with both the upstream `pins` package and the
+  existing `aspire_data.pins` SHA-pin-drift module.
+- First consumer: DASH_Anthro republishes an `anthro_records` pin after every
+  Oracle write.
+
 ## [0.11.0] — 2026-06-10
 
 ### Added — `aspire-data bump-pins`: lib SHA-pin drift report + rewrite
