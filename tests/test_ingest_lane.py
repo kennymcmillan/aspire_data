@@ -110,3 +110,45 @@ def test_chunked_upsert_width_aware():
     n = chunked_upsert(FakeApi(), "t", recs, key_columns=["row_uid"], api_key="k")
     assert n == 450
     assert max(calls) <= 200 and sum(calls) == 450               # 20000/100 = 200-row chunks
+
+
+def test_sql_literal():
+    from aspire_data.sports_api import sql_literal
+    assert sql_literal(None) == "NULL"
+    assert sql_literal(True) == "1" and sql_literal(False) == "0"
+    assert sql_literal(3) == "3"
+    assert sql_literal("a'b") == "'a''b'"
+    assert sql_literal("a\\b") == "'a\\\\b'"
+
+
+def test_replace_children_insert_before_delete():
+    from aspire_data.ingest import replace_children
+    calls = []
+
+    class FakeApi:
+        def table(self, table, **k):
+            return [{"id": 50}]            # watermark
+
+        def tool_write(self, name, **params):
+            calls.append((name, params.get("sql", "")))
+
+    n = replace_children(FakeApi(), "t", "test_uuid", "u1", [{"a": 1}, {"a": 2}], api_key="k")
+    assert n == 2
+    # bulk_insert MUST precede the delete, and the delete uses the watermark + quoted key
+    assert [c[0] for c in calls] == ["bulk_insert", "execute_write_sql"]
+    assert "id <= 50" in calls[1][1] and "test_uuid = 'u1'" in calls[1][1]
+
+
+def test_replace_children_empty_rows_still_deletes():
+    from aspire_data.ingest import replace_children
+    calls = []
+
+    class FakeApi:
+        def table(self, table, **k):
+            return []
+
+        def tool_write(self, name, **params):
+            calls.append(name)
+
+    n = replace_children(FakeApi(), "t", "test_uuid", "u1", [], api_key="k")
+    assert n == 0 and calls == ["execute_write_sql"]   # no insert, just the stale-delete

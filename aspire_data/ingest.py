@@ -278,6 +278,33 @@ def fetch_identifiers(api=None) -> list[dict]:
 
 # ---------------------------------------------------------------- writes
 
+def replace_children(api, table: str, key_col: str, key_val, rows: list[dict], *,
+                     api_key: str | None = None) -> int:
+    """Replace a parent's child rows NON-destructively: insert the new generation,
+    then delete the previous one (by ``max(id)`` watermark). A failed insert raises
+    BEFORE any delete, so the existing rows survive — unlike delete-then-insert,
+    which wipes children if the re-insert fails. Returns rows inserted.
+
+    For an AUTO_INCREMENT-keyed child table (raw breaths, per-stage rows…) owned by
+    a parent ``key_col = key_val`` (e.g. ``test_uuid``). ``api`` is a
+    :class:`aspire_data.sports_api.SportsApi`.
+    """
+    from aspire_data.sports_api import sql_literal
+    api_key = api_key or os.environ["SPORTS_WRITE_API_KEY"]
+    keyq = sql_literal(key_val)
+    existing = api.table(table, where=f"{key_col} = {keyq}",
+                         order_by="id", desc=True, limit=1)
+    watermark = int(existing[0]["id"]) if existing and existing[0].get("id") is not None else 0
+    if rows:
+        api.tool_write("bulk_insert", table_name=table, records=rows,
+                       on_duplicate="error", api_key=api_key)
+    # Only after a successful insert do we remove the previous generation.
+    api.tool_write("execute_write_sql",
+                   sql=f"DELETE FROM {table} WHERE {key_col} = {keyq} AND id <= {watermark}",
+                   api_key=api_key)
+    return len(rows)
+
+
 def chunked_upsert(api, table: str, records: list[dict], *,
                    key_columns: list[str], api_key: str | None = None,
                    target_chunk_cells: int = 20000) -> int:

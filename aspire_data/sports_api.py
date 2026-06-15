@@ -23,14 +23,34 @@ USAGE
 """
 from __future__ import annotations
 
-__all__ = ['SportsApi', 'SportsApiError', 'SportsApiWriteError']
+__all__ = ['SportsApi', 'SportsApiError', 'SportsApiWriteError', 'sql_literal']
 
 import os
+from datetime import date, datetime
 from typing import Any
 
 import httpx
 
 from aspire_data._common import _base
+
+
+def sql_literal(v: Any) -> str:
+    """Quote a Python value as a MySQL literal for hand-built WHERE/DELETE clauses
+    fed to ``execute_write_sql``. None->NULL, bool->1/0, numbers verbatim,
+    date/datetime ISO-quoted, strings escaped (``\\`` and ``'`` doubled).
+
+    NOTE: ``execute_write_sql`` rejects SQL ``--`` line comments — keep DDL clean.
+    """
+    if v is None:
+        return "NULL"
+    if isinstance(v, bool):
+        return "1" if v else "0"
+    if isinstance(v, (int, float)):
+        return str(v)
+    if isinstance(v, (date, datetime)):
+        return f"'{v.isoformat()}'"
+    s = str(v).replace("\\", "\\\\").replace("'", "''")
+    return f"'{s}'"
 
 
 class SportsApiError(RuntimeError):

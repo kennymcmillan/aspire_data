@@ -23,6 +23,16 @@ shape (`player_id`, `full_name`, `mrn`, `sport`, `photo_url`) and accepts
 
 These let athlete apps drop their hand-copied `data/sams.py` roster layer.
 
+### Added — Sports-API write helpers (promoted from DASH_Vyntus)
+
+- `aspire_data.sports_api.sql_literal(v)` — quote a Python value as a MySQL literal
+  for hand-built WHERE/DELETE clauses (None/bool/number/date/str, quotes escaped).
+  Every Sports-API write app re-implemented this.
+- `aspire_data.ingest.replace_children(api, table, key_col, key_val, rows)` —
+  NON-destructive child-row replace (insert new generation, then delete the old by
+  `max(id)` watermark) so a failed insert never wipes children. The idempotent
+  save-children pattern (CPET breaths/stages, anthro, VALD).
+
 ## [0.12.0] — 2026-06-11
 
 ### Added — `aspire_data.pinboard`: Posit Connect pins (org CSV sharing)
