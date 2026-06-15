@@ -47,6 +47,34 @@ DEFAULT_SPORTS = {
 }
 
 
+def _to_date(v):
+    from datetime import date as _date, datetime as _dt
+    if not v:
+        return None
+    if isinstance(v, _date):
+        return v
+    if isinstance(v, str):
+        try:
+            return _dt.strptime(v.split("T")[0], "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    return None
+
+
+def _flatten(v, key="name"):
+    if isinstance(v, dict):
+        return v.get(key) or v.get("description") or None
+    return v
+
+
+def _age_from_dob(dob):
+    if not dob:
+        return None
+    from datetime import date as _date
+    today = _date.today()
+    return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+
 def first_target_event(raw: str | None) -> str | None:
     """Pick the first usable event from SAMS `targetEventNames`.
 
@@ -134,6 +162,40 @@ class SamsClient:
         """Fuzzy search players by name / MRN / partial. Returns raw rows."""
         return self._get("/api/ExternalApps/player/search", params={"q": q}) or []
 
+    def _build_hit(self, row: dict) -> dict | None:
+        """Normalise a SAMS player/roster row to the picker shape. None if no playerId."""
+        pid = row.get("playerId")
+        if pid is None:
+            return None
+        sid = row.get("sportId")
+        return {
+            "player_id": int(pid),
+            "full_name": (row.get("fullName") or row.get("playerName")
+                          or row.get("name") or ""),
+            "arabic_name": row.get("arabicName"),
+            "mrn": str(row["mrn"]) if row.get("mrn") is not None else None,
+            "sport_id": int(sid) if sid is not None else None,
+            "sport": self.sports.get(int(sid)) if sid is not None else None,
+            "photo_url": row.get("imageUrl") or row.get("profileImageUrl"),
+            "is_active": row.get("isActive"),
+        }
+
+    def search_athletes(self, q: str, *, limit: int = 20,
+                        active_only: bool = True) -> list[dict]:
+        """Name/MRN search returning the picker shape (player_id, full_name, mrn,
+        sport, photo_url). Use this for athlete pickers; ``search`` returns raw rows."""
+        resp = self._get("/api/ExternalApps/player/search", params={"q": (q or "").strip()})
+        if isinstance(resp, list):
+            rows = resp
+        elif isinstance(resp, dict) and isinstance(resp.get("items"), list):
+            rows = resp["items"]
+        else:
+            rows = []
+        if active_only:
+            rows = [r for r in rows if r.get("isActive") is True]
+        hits = [h for h in (self._build_hit(r) for r in rows[:limit]) if h]
+        return hits
+
     def get_athlete_context(self, player_id: int, *, enrich: bool = False) -> dict | None:
         """Full athlete record (name, sport, age, photo, etc.) by player_id.
 
@@ -172,6 +234,58 @@ class SamsClient:
                 ctx["player_type"] = enr.get("playerTypeName")
                 ctx["coach_name"]  = enr.get("coachName")
         self._context_cache[cache_key] = ctx
+        return ctx
+
+    def _build_context(self, row: dict) -> dict:
+        sid = row.get("sportId")
+        dob = _to_date(row.get("dateOfBirth"))
+        return {
+            "player_id": int(row["playerId"]),
+            "mrn": str(row["mrn"]) if row.get("mrn") is not None else None,
+            "full_name": row.get("fullName") or "",
+            "arabic_name": row.get("arabicName"),
+            "date_of_birth": dob.isoformat() if dob else None,
+            "age": _age_from_dob(dob),
+            "sex": _flatten(row.get("gender")),
+            "sport_id": int(sid) if sid is not None else None,
+            "sport": self.sports.get(int(sid)) if sid is not None else None,
+            "photo_url": row.get("profileImageUrl") or row.get("imageUrl"),
+            "is_active": row.get("isActive"),
+            "pathway": row.get("pathway"),
+            "is_target": (row.get("pathway") == "Target") if row.get("pathway") else None,
+        }
+
+    def athlete_card(self, player_id: int) -> dict:
+        """Full athlete card in the picker/save shape (player_id, full_name, mrn,
+        date_of_birth, age, sex, sport, photo_url) enriched with current
+        enrollment (sport, discipline, target_event, coach). Uses the richer
+        ``/details`` endpoint. Raises SamsError if the player isn't found.
+        """
+        pid = int(player_id)
+        ck = (pid, "card")
+        if ck in self._context_cache:
+            return self._context_cache[ck]
+        details = self._get(f"/api/ExternalApps/player/{pid}/details")
+        if not details:
+            raise SamsError(f"player_id {pid} not found in SAMS")
+        ctx = self._build_context(details)
+        try:
+            enr = self.get_current_enrollment(pid)
+        except SamsError:
+            enr = {}
+        if enr:
+            sid = enr.get("sportId")
+            if sid is not None:
+                ctx["sport_id"] = int(sid)
+                ctx["sport"] = (enr.get("sportName") or self.sports.get(int(sid))
+                                or ctx.get("sport"))
+            ctx["discipline_id"] = enr.get("disciplineId")
+            ctx["discipline"] = _flatten(enr.get("disciplineName"))
+            ctx["target_event"] = first_target_event(enr.get("targetEventNames"))
+            ctx["target_event_raw"] = enr.get("targetEventNames")
+            ctx["player_type"] = enr.get("playerTypeName")
+            ctx["coach_name"] = enr.get("coachName")
+        self._context_cache[ck] = ctx
         return ctx
 
     # ---- enrollment periods (sport / discipline / target event) ----
@@ -231,36 +345,43 @@ class SamsClient:
         return ctx
 
     # ---- training plans + rosters ----
-    def list_training_plans(self, sport_id: int, training_date: str) -> list[dict]:
-        key = (int(sport_id), training_date)
+    # NOTE: SAMS serves these on the *Search* endpoints (TrainingPlans/Search,
+    # TrainingPlanPlayer/Search); the older `/training-plans` paths 404. The plan
+    # id is `trainingPlanId` (camelCase) and roster rows carry `playerId`.
+    def list_training_plans(self, sport_id: int, training_date: str,
+                            committee_id: int | None = None) -> list[dict]:
+        key = (int(sport_id), training_date,
+               int(committee_id) if committee_id else None)
         if key in self._plans_cache:
             return self._plans_cache[key]
-        out = self._get(
-            "/api/ExternalApps/training-plans",
-            params={"sportId": sport_id, "trainingDate": training_date},
-        ) or []
-        self._plans_cache[key] = out
-        return out
+        params: dict = {"SportId": int(sport_id), "TrainingDate": training_date}
+        if committee_id:
+            params["CommitteeId"] = int(committee_id)
+        resp = self._get("/api/ExternalApps/TrainingPlans/Search", params=params) or []
+        plans = resp if isinstance(resp, list) else (resp.get("items") or [])
+        self._plans_cache[key] = plans
+        return plans
 
     def get_plan_roster(self, training_plan_id: int) -> list[dict]:
+        """Roster for one plan, in the picker shape ({player_id, full_name, ...})."""
         key = int(training_plan_id)
         if key in self._roster_cache:
             return self._roster_cache[key]
-        out = self._get(
-            f"/api/ExternalApps/training-plans/{key}/roster"
-        ) or []
+        resp = self._get("/api/ExternalApps/TrainingPlanPlayer/Search",
+                         params={"TrainingPlanId": key}) or []
+        rows = resp if isinstance(resp, list) else (resp.get("items") or [])
+        out = [h for h in (self._build_hit(r) for r in rows) if h]
         self._roster_cache[key] = out
         return out
 
-    def list_sport_roster(self, sport_id: int, *,
+    def list_sport_roster(self, sport_id: int, *, committee_id: int | None = None,
                            days_back: int = 60) -> list[dict]:
-        """All unique athletes for a sport over the last N days.
-
-        Parallel fan-out: (a) plan-list per day → unique plan-ids,
-        (b) roster per plan → dedupe by player_id. ~1.5 s wall-clock
-        for a 60-day window.
+        """All unique active athletes for a sport over the last N days, in the
+        picker shape. Walks the last N days of training plans (SAMS has no
+        players-by-sport endpoint), dedupes by player_id. ``committee_id`` scopes
+        to a level (1=Federation, 2=Aspire Academy, 3=Pre-Academy, 4=External).
         """
-        key = (int(sport_id), int(days_back))
+        key = (int(sport_id), int(committee_id) if committee_id else None, int(days_back))
         if key in self._sport_cache:
             return self._sport_cache[key]
 
@@ -269,15 +390,16 @@ class SamsClient:
 
         plan_ids: set[int] = set()
         plan_futs = [self._pool.submit(self.list_training_plans,
-                                        int(sport_id), d) for d in dates]
+                                        int(sport_id), d, committee_id) for d in dates]
         for fut in as_completed(plan_futs, timeout=60):
             try:
                 plans = fut.result() or []
             except Exception:  # noqa: BLE001
                 continue
             for p in plans:
-                if p.get("training_plan_id"):
-                    plan_ids.add(int(p["training_plan_id"]))
+                tpid = p.get("trainingPlanId")
+                if tpid is not None:
+                    plan_ids.add(int(tpid))
 
         if not plan_ids:
             self._sport_cache[key] = []
