@@ -2,6 +2,37 @@
 
 All notable changes to `aspire_data`.
 
+## [0.13.0] — 2026-06-15
+
+### Fixed — `SamsClient` training-plan endpoints (were 404)
+
+`list_training_plans` / `get_plan_roster` / `list_sport_roster` used the
+`/api/ExternalApps/training-plans` paths, which SAMS returns **404** for, and
+keyed plan ids on snake_case `training_plan_id` while the API returns
+`trainingPlanId`. Repointed to the live `TrainingPlans/Search` +
+`TrainingPlanPlayer/Search` endpoints; `list_sport_roster` now returns the picker
+shape (`player_id`, `full_name`, `mrn`, `sport`, `photo_url`) and accepts
+`committee_id`. Verified live: `list_sport_roster(1, days_back=14)` → 234 athletes.
+
+### Added — picker/save shapes on `SamsClient`
+
+- `search_athletes(q, *, limit, active_only)` — name/MRN search in the picker shape.
+- `athlete_card(player_id)` — full athlete card (player_id, full_name, mrn,
+  date_of_birth, age, sex, sport, photo_url) enriched with current enrollment
+  (sport/discipline/target_event/coach), via the richer `/details` endpoint.
+
+These let athlete apps drop their hand-copied `data/sams.py` roster layer.
+
+### Added — Sports-API write helpers (promoted from DASH_Vyntus)
+
+- `aspire_data.sports_api.sql_literal(v)` — quote a Python value as a MySQL literal
+  for hand-built WHERE/DELETE clauses (None/bool/number/date/str, quotes escaped).
+  Every Sports-API write app re-implemented this.
+- `aspire_data.ingest.replace_children(api, table, key_col, key_val, rows)` —
+  NON-destructive child-row replace (insert new generation, then delete the old by
+  `max(id)` watermark) so a failed insert never wipes children. The idempotent
+  save-children pattern (CPET breaths/stages, anthro, VALD).
+
 ## [0.12.0] — 2026-06-11
 
 ### Added — `aspire_data.pinboard`: Posit Connect pins (org CSV sharing)

@@ -68,6 +68,68 @@ def test_default_sports_dict_present():
     assert "Padel" in DEFAULT_SPORTS.values()
 
 
+# ---- picker-shape methods (v0.13: Search endpoints) ----
+
+def test_search_athletes_picker_shape(mock_httpx):
+    from aspire_data.sams import SamsClient
+    s = SamsClient()
+    mock_httpx.instances[-1].set_response(json_body=[
+        {"playerId": 42, "fullName": "Amir Omuash", "mrn": "20040861",
+         "sportId": 1, "isActive": True},
+        {"playerId": 9, "fullName": "Inactive Guy", "isActive": False},
+    ])
+    hits = s.search_athletes("a")
+    assert len(hits) == 1                       # inactive filtered out
+    assert hits[0] == {
+        "player_id": 42, "full_name": "Amir Omuash", "arabic_name": None,
+        "mrn": "20040861", "sport_id": 1, "sport": "Athletics",
+        "photo_url": None, "is_active": True,
+    }
+
+
+def test_list_training_plans_uses_search_endpoint(mock_httpx):
+    from aspire_data.sams import SamsClient
+    s = SamsClient()
+    inst = mock_httpx.instances[-1]
+    inst.set_response(json_body=[{"trainingPlanId": 100}])
+    s.list_training_plans(1, "2026-06-15")
+    assert inst.calls[0][1] == "/api/ExternalApps/TrainingPlans/Search"
+
+
+def test_get_plan_roster_builds_hits(mock_httpx):
+    from aspire_data.sams import SamsClient
+    s = SamsClient()
+    inst = mock_httpx.instances[-1]
+    inst.set_response(json_body=[
+        {"playerId": 7, "fullName": "Runner", "mrn": "M7", "sportId": 1, "isActive": True},
+        {"fullName": "No id — dropped"},   # no playerId -> filtered
+    ])
+    roster = s.get_plan_roster(100)
+    assert inst.calls[0][1] == "/api/ExternalApps/TrainingPlanPlayer/Search"
+    assert len(roster) == 1
+    assert roster[0]["player_id"] == 7 and roster[0]["full_name"] == "Runner"
+
+
+def test_athlete_card_mapped_shape(mock_httpx):
+    from aspire_data.sams import SamsClient
+    s = SamsClient()
+    inst = mock_httpx.instances[-1]
+    inst.set_response_sequence(
+        {"json_body": {"playerId": 2841, "fullName": "Abdalla Zaytoun",
+                       "mrn": "M1", "dateOfBirth": "2013-10-01",
+                       "gender": "Male", "sportId": 1, "isActive": True}},
+        {"json_body": []},   # enrollment periods (no enrichment)
+    )
+    card = s.athlete_card(2841)
+    assert card["player_id"] == 2841
+    assert card["full_name"] == "Abdalla Zaytoun"
+    assert card["date_of_birth"] == "2013-10-01"
+    assert card["age"] is not None
+    assert card["sex"] == "Male"
+    assert card["sport"] == "Athletics"
+    assert inst.calls[0][1] == "/api/ExternalApps/player/2841/details"
+
+
 # ---- 5xx / transport retry (urllib3-Retry semantics restored) ----
 
 def test_get_retries_5xx_then_succeeds(mock_httpx):
