@@ -2,6 +2,26 @@
 
 All notable changes to `aspire_data`.
 
+## [0.14.0] — 2026-06-17
+
+### Added — Connect user directory on `ConnectAdminClient`
+
+For org-wide "requested by / assign to" pickers (name + email) so apps stop
+hand-rolling a user table:
+
+- `get_current_user()` — the API key owner's record (username, first/last name,
+  email, guid, user_role). NB: not the app visitor — inside a deployed Connect
+  app the visitor is the `RSTUDIO_USER_NAME` env var.
+- `list_users(prefix=None, page_size=500)` — every Connect user, auto-paginated
+  (`GET /v1/users`). Each row: `username`, `first_name`, `last_name`, `email`,
+  `user_role`, `guid`, `locked`, `confirmed`, ….
+- `find_user(username_or_email)` — resolve one user by exact username/email
+  (case-insensitive); maps a Connect app's `RSTUDIO_USER_NAME` → {name, email}.
+
+First consumer: Operations Tracker (requestor picker → also auto-fills the
+completion-email recipient). Requires a key allowed to enumerate users
+(administrator sees all).
+
 ## [0.13.0] — 2026-06-15
 
 ### Fixed — `SamsClient` training-plan endpoints (were 404)

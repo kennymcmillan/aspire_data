@@ -57,6 +57,56 @@ class ConnectAdminClient:
         """Update content settings — e.g. min_processes, idle_timeout."""
         return self._client.patch(f"/content/{guid}", json=fields).raise_for_status().json()
 
+    # ---- users (directory) ----
+    def get_current_user(self) -> dict:
+        """The API KEY OWNER's record (username, first/last name, email, guid,
+        user_role). NB: this is NOT the app visitor — inside a deployed Connect
+        app the visitor's username is the ``RSTUDIO_USER_NAME`` env var; resolve
+        it against :meth:`list_users` to get their email/display name."""
+        return self._client.get("/user").raise_for_status().json()
+
+    def list_users(self, *, prefix: str | None = None,
+                   page_size: int = 500) -> list[dict]:
+        """Every Connect user (auto-paginated). Each row has ``username``,
+        ``first_name``, ``last_name``, ``email``, ``user_role``, ``guid``,
+        ``locked``, ``confirmed``, .... Pass ``prefix`` to server-side filter by
+        the start of username/email/name.
+
+        Powers org-wide "assign to / requested by" pickers (name + email) so apps
+        don't hand-roll a user table. Requires a key allowed to enumerate users
+        (administrator sees all)."""
+        out: list[dict] = []
+        page = 1
+        while True:
+            params: dict = {"page_number": page, "page_size": min(page_size, 500)}
+            if prefix:
+                params["prefix"] = prefix
+            body = self._client.get("/users", params=params).raise_for_status().json()
+            results = body.get("results") or []
+            out.extend(results)
+            total = body.get("total")
+            if not results or (total is not None and len(out) >= total):
+                break
+            page += 1
+        return out
+
+    def find_user(self, username_or_email: str) -> dict | None:
+        """Resolve one user by exact username or email (case-insensitive) —
+        e.g. map a Connect app's ``RSTUDIO_USER_NAME`` to {name, email}."""
+        needle = (username_or_email or "").strip().lower()
+        if not needle:
+            return None
+        for u in self.list_users(prefix=username_or_email.split("@")[0] or None):
+            if needle in (str(u.get("username", "")).lower(),
+                          str(u.get("email", "")).lower()):
+                return u
+        # prefix may miss (e.g. display-name vs username) — fall back to full scan
+        for u in self.list_users():
+            if needle in (str(u.get("username", "")).lower(),
+                          str(u.get("email", "")).lower()):
+                return u
+        return None
+
     # ---- jobs ----
     def list_jobs(self, guid: str, count: int = 10) -> list[dict]:
         return self._client.get(f"/content/{guid}/jobs",
