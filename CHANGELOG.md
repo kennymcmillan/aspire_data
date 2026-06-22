@@ -2,6 +2,22 @@
 
 All notable changes to `aspire_data`.
 
+## [0.15.0] - 2026-06-22
+
+### Added - benchmarks module (data layer for the aspire_dash benchmarking chart)
+
+`aspire_data.benchmarks` shapes raw results into the inputs for
+`aspire_dash.plots.percentile_age_chart`, so any sport's app wires data into the
+chart without hand-rolling age, personal-best, direction, or standard logic
+(the "aspire_dash component backed by an aspire_data helper" pattern):
+- `benchmark_inputs(results, dob, sex, event)` -> one call returns
+  `{marks, reference_lines, lower_is_better, value_format}` ready for the chart.
+- `marks_from_results(results, dob, ...)` -> `[{age, mark, pb}]` (decimal age at
+  result, running-best PB flags, direction inferred from the event).
+- `standard_line(event, sex, pin=...)` -> a qualifying-standard reference line
+  resolved from a pinned standards table (e.g. `world_athletics_u20_standards`).
+- `event_direction(event)` -> (lower_is_better, value_format) for athletics.
+
 ## [0.14.0] — 2026-06-17
 
 ### Added — Connect user directory on `ConnectAdminClient`
