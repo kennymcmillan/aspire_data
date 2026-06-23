@@ -27,6 +27,8 @@ Then grab whichever client(s) your app needs:
     from aspire_data.vald import vald_summary, cmj_history, rjt_history
     from aspire_data.identity import resolve_to_sams
     from aspire_data.pinboard import publish_dataframe, read_pin
+    from aspire_data.benchmarks import (benchmark_inputs, percentile_of_mark,
+                                         best_pb_by_ageband, age_band_centre)
 
 Most clients read env vars on construction. Pattern:
 
@@ -49,7 +51,7 @@ CLI
 """
 from __future__ import annotations
 
-__version__ = "0.18.0"
+__version__ = "0.19.0"
 
 __all__ = [
     "__version__",

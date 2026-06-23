@@ -2,6 +2,38 @@
 
 All notable changes to `aspire_data`.
 
+## [0.19.0] - 2026-06-23
+
+### Added - `benchmarks` percentile toolkit (`percentile_of_mark` + age-band PBs)
+
+One tested home for "what percentile is this mark?" and "best PB per age band",
+so every app shares them instead of hand-rolling. `standard_bands` already gives
+percentile -> mark (the chart bands); these add the inverse and the per-age-band
+PB series, all against the same historical Power-of-10 norms
+(`aspire_data_event_percentiles`, integer-centred bands '12.5 - 13.5' etc.).
+
+- **`percentile_of_mark(event, mark, *, age=None, query=None, norms=None)`** ->
+  percentile `0..100` (float) or `None` (fail-soft) when the event has no
+  international norm / the norms are unavailable. Interpolates linearly across
+  every `p` column present (p0..p100, not just the five chart bands) of the age
+  band whose centre is nearest `age`; marks beyond the best/worst column clamp
+  to 100/0. Direction is implicit in the norms (the p100 column is always the
+  best mark, faster OR farther) so it needs no direction flag and works for both
+  run and field events; implement / hurdle-height events pick the age-correct
+  variant. `age` is effectively required when an event has more than one band.
+- **`age_band_centre(age)`** -> the integer-year band centre for a decimal age
+  (lower edge inclusive at N-0.5: 12.5..13.499 -> 13, 13.5 -> 14), matching the
+  table's stored bins so it feeds straight into `percentile_of_mark(age=...)`.
+- **`best_pb_by_ageband(results, dob, *, event=..., with_percentile=False, ...)`**
+  -> best mark per Power-of-10 age band for one athlete/event (fastest for track,
+  farthest for field), one ascending row per band `{age_band, age, mark, date,
+  n}`. With `with_percentile=True` each row also carries its band percentile - a
+  percentile-per-age-band series, the input shape for future trajectory modelling.
+
+First consumers: the endurance-dashboard Overview KPI tile (primary-event PB +
+percentile) and competition-result percentile banding. 18 hermetic tests in
+`tests/test_benchmarks.py` (pass `norms=` a DataFrame, no network).
+
 ## [0.18.0] - 2026-06-23
 
 ### Added - `aspire_data.vald` (VALD-from-Oracle reads)

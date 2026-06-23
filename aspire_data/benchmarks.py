@@ -310,6 +310,159 @@ def standard_bands(event, *, age=None, pct=(10, 25, 50, 75, 90), elite=100,
     return out.sort_values("age").reset_index(drop=True)
 
 
+def percentile_of_mark(event, mark, *, age=None, query=None, norms=None):
+    """Inverse of :func:`standard_bands`: where does ``mark`` fall within the
+    historical Power-of-10 percentile norms for this event at this ``age``?
+
+    Returns a percentile 0..100 (float, "this mark is better than ~P% of the
+    norm population"), or ``None`` when the event has no international norm or
+    the norms are unavailable (fail-soft). Use it for a single percentile KPI
+    or to band one competition result, sharing one source with the chart bands.
+
+    Interpolates linearly across every ``p`` column present (p0..p100, not just
+    the five chart bands) of the age band whose centre is nearest ``age``; marks
+    beyond the best/worst column clamp to 100/0. Direction is implicit in the
+    norms (the p100 column is always the best mark, faster OR farther), so this
+    works for both run and field events without a direction flag. For
+    implement / hurdle-height events the age-correct variant is chosen.
+
+    ``age`` is effectively required when an event has more than one age band.
+    Reads via ``query`` / aspire_data SportsApi unless a pre-fetched ``norms``
+    DataFrame is supplied.
+    """
+    import pandas as pd
+    m = _num(mark)
+    if m is None:
+        return None
+    base = _EVENT_BASE.get(str(event).strip())
+    if base is None:
+        return None
+    df = norms if norms is not None else percentile_norms(query)
+    if df is None or df.empty or "event" not in df.columns:
+        return None
+
+    impl = _IMPLEMENT_BY_AGE.get(base)
+    wanted = ({f"{base} {suf}".strip() for _, suf in impl} | {base}) if impl else {base}
+    fam = df[df["event"].isin(wanted)].copy()
+    if fam.empty:
+        return None
+    fam["age_centre"] = fam["age_bin"].map(_bin_centre)
+    fam = fam.dropna(subset=["age_centre"])
+    if fam.empty:
+        return None
+
+    # pick the age band nearest `age`; the age-correct implement variant breaks ties
+    if age is not None:
+        fam = fam.assign(_d=(fam["age_centre"] - float(age)).abs()).sort_values("_d")
+        if impl:
+            variant = _norm_variant(base, age)
+            pick = fam[fam["event"] == variant]
+            row = (pick if not pick.empty else fam).iloc[0]
+        else:
+            row = fam.iloc[0]
+    elif len(fam) == 1:
+        row = fam.iloc[0]
+    else:
+        return None   # ambiguous without an age
+
+    # pair each percentile column with its mark, then read the curve at `mark`
+    pairs = []
+    for col in row.index:
+        c = str(col)
+        if c.startswith("p") and c[1:].isdigit():
+            v = _num(row[col])
+            if v is not None:
+                pairs.append((float(c[1:]), v))
+    if len(pairs) < 2:
+        return None
+    pairs.sort(key=lambda t: t[1])               # by mark ascending
+    marks, pcts = [], []
+    for p, mk in pairs:                          # drop duplicate marks (keep first)
+        if not marks or mk > marks[-1]:
+            marks.append(mk)
+            pcts.append(p)
+    if len(marks) < 2:
+        return round(pcts[0], 1)
+    if m <= marks[0]:
+        return round(pcts[0], 1)
+    if m >= marks[-1]:
+        return round(pcts[-1], 1)
+    for i in range(1, len(marks)):
+        if m <= marks[i]:
+            x0, x1, y0, y1 = marks[i - 1], marks[i], pcts[i - 1], pcts[i]
+            return round(y0 + (y1 - y0) * (m - x0) / (x1 - x0), 1)
+    return round(pcts[-1], 1)
+
+
+def age_band_centre(age):
+    """The Power-of-10 age-band centre for a decimal age: the integer year, with
+    the lower edge inclusive at ``N-0.5`` and the upper exclusive at ``N+0.5``
+    (so 12.5..13.499 -> 13, 13.5 -> 14). Matches the integer-centred bands stored
+    in ``aspire_data_event_percentiles`` ('12.5 - 13.5', '13.5 - 14.5', ...), so a
+    band centre feeds straight into :func:`percentile_of_mark` as ``age=``.
+    Returns ``None`` for a non-numeric age."""
+    a = _num(age)
+    if a is None:
+        return None
+    return float(int(a + 0.5))
+
+
+def best_pb_by_ageband(results, dob, *, event=None, date_col="Start_Date",
+                       value_col="Result_numerical", event_col="Event_standard",
+                       lower_is_better=None, age_range=(8, 40),
+                       with_percentile=False, norms=None, query=None) -> list[dict]:
+    """Best mark in each Power-of-10 age band for one athlete and one event.
+
+    Buckets ``results`` into the integer-year bands of
+    :func:`age_band_centre` (best = fastest for track / walks, farthest for
+    field; direction inferred from ``event`` unless ``lower_is_better`` is set),
+    and returns one row per band the athlete competed in, ascending::
+
+        [{age_band, age, mark, date, n}, ...]
+
+    ``age_band`` is the integer band centre, ``age`` the decimal age at which the
+    band-best mark was set, ``n`` the number of results in the band. With
+    ``with_percentile=True`` (needs ``event``) each row also gets ``percentile``
+    via :func:`percentile_of_mark` at the band centre, against the SAME historical
+    norms - i.e. a percentile-per-age-band series, the input shape for trajectory
+    modelling. ``results`` is a DataFrame or list of dicts; ``dob`` ISO/date.
+    """
+    born = _to_date(dob)
+    if born is None:
+        return []
+    if lower_is_better is None:
+        lower_is_better = event_direction(event)[0]
+
+    rows = _records(results)
+    if event is not None and event_col:
+        rows = [r for r in rows if str(r.get(event_col)) == str(event)]
+
+    buckets: dict[float, dict] = {}
+    for r in rows:
+        d = _to_date(r.get(date_col))
+        v = _num(r.get(value_col))
+        if d is None or v is None:
+            continue
+        age = (d - born).days / 365.25
+        if not (age_range[0] <= age <= age_range[1]):
+            continue
+        band = age_band_centre(age)
+        if band is None:
+            continue
+        b = buckets.setdefault(band, {"age_band": band, "age": None,
+                                      "mark": None, "date": None, "n": 0})
+        b["n"] += 1
+        if b["mark"] is None or (v < b["mark"] if lower_is_better else v > b["mark"]):
+            b["mark"], b["age"], b["date"] = v, round(age, 2), d.isoformat()
+
+    out = [buckets[k] for k in sorted(buckets)]
+    if with_percentile and event is not None:
+        for row in out:
+            row["percentile"] = percentile_of_mark(
+                event, row["mark"], age=row["age_band"], norms=norms, query=query)
+    return out
+
+
 def benchmark_inputs(results, dob, sex, event, *,
                      pin="world_athletics_u20_standards",
                      date_col="Start_Date", value_col="Result_numerical",
