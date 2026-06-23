@@ -96,7 +96,7 @@ def test_non_numeric_mark_returns_none():
 
 # ============ best_pb_by_ageband + age_band_centre ============
 
-from aspire_data.benchmarks import age_band_centre, best_pb_by_ageband
+from aspire_data.benchmarks import age_band_centre, age_band_label, best_pb_by_ageband
 
 
 # Integer-centred bands matching the live aspire_data_event_percentiles table
@@ -130,14 +130,23 @@ def test_age_band_centre_rounds_half_up():
     assert age_band_centre(None) is None
 
 
+def test_age_band_label_shows_range():
+    assert age_band_label(13.0) == "12.5 - 13.5"   # centre
+    assert age_band_label(13.2) == "12.5 - 13.5"   # any age in the band
+    assert age_band_label(9.0) == "8.5 - 9.5"
+    assert age_band_label(None) is None
+
+
 def test_best_pb_per_band_field_event_takes_max():
     out = best_pb_by_ageband(_results(), "2010-01-01", event="Long Jump")
     bands = {r["age_band"]: r for r in out}
     assert set(bands) == {13.0, 14.0}
     assert bands[13.0]["mark"] == 5.50      # best (max) of 5.20, 5.50
     assert bands[13.0]["n"] == 2            # two results in band 13
+    assert bands[13.0]["age_band_label"] == "12.5 - 13.5"
     assert bands[14.0]["mark"] == 6.00
     assert bands[14.0]["n"] == 1
+    assert bands[14.0]["age_band_label"] == "13.5 - 14.5"
 
 
 def test_event_filter_excludes_other_events():

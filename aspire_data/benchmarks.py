@@ -407,6 +407,16 @@ def age_band_centre(age):
     return float(int(a + 0.5))
 
 
+def age_band_label(age):
+    """The Power-of-10 age-band label for an age or band centre, formatted to
+    match the stored bins exactly ('12.5 - 13.5'). 13.0 and 13.2 both -> the
+    12.5..13.5 band; ``None`` for a non-numeric age."""
+    c = age_band_centre(age)
+    if c is None:
+        return None
+    return "%g - %g" % (c - 0.5, c + 0.5)
+
+
 def best_pb_by_ageband(results, dob, *, event=None, date_col="Start_Date",
                        value_col="Result_numerical", event_col="Event_standard",
                        lower_is_better=None, age_range=(8, 40),
@@ -418,10 +428,11 @@ def best_pb_by_ageband(results, dob, *, event=None, date_col="Start_Date",
     field; direction inferred from ``event`` unless ``lower_is_better`` is set),
     and returns one row per band the athlete competed in, ascending::
 
-        [{age_band, age, mark, date, n}, ...]
+        [{age_band, age_band_label, age, mark, date, n}, ...]
 
-    ``age_band`` is the integer band centre, ``age`` the decimal age at which the
-    band-best mark was set, ``n`` the number of results in the band. With
+    ``age_band`` is the integer band centre, ``age_band_label`` its range string
+    ('12.5 - 13.5'), ``age`` the decimal age at which the band-best mark was set,
+    ``n`` the number of results in the band. With
     ``with_percentile=True`` (needs ``event``) each row also gets ``percentile``
     via :func:`percentile_of_mark` at the band centre, against the SAME historical
     norms - i.e. a percentile-per-age-band series, the input shape for trajectory
@@ -449,8 +460,9 @@ def best_pb_by_ageband(results, dob, *, event=None, date_col="Start_Date",
         band = age_band_centre(age)
         if band is None:
             continue
-        b = buckets.setdefault(band, {"age_band": band, "age": None,
-                                      "mark": None, "date": None, "n": 0})
+        b = buckets.setdefault(band, {"age_band": band,
+                                      "age_band_label": age_band_label(band),
+                                      "age": None, "mark": None, "date": None, "n": 0})
         b["n"] += 1
         if b["mark"] is None or (v < b["mark"] if lower_is_better else v > b["mark"]):
             b["mark"], b["age"], b["date"] = v, round(age, 2), d.isoformat()

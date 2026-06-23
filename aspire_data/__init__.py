@@ -28,7 +28,8 @@ Then grab whichever client(s) your app needs:
     from aspire_data.identity import resolve_to_sams
     from aspire_data.pinboard import publish_dataframe, read_pin
     from aspire_data.benchmarks import (benchmark_inputs, percentile_of_mark,
-                                         best_pb_by_ageband, age_band_centre)
+                                         best_pb_by_ageband, age_band_centre,
+                                         age_band_label)
 
 Most clients read env vars on construction. Pattern:
 

@@ -24,10 +24,12 @@ PB series, all against the same historical Power-of-10 norms
 - **`age_band_centre(age)`** -> the integer-year band centre for a decimal age
   (lower edge inclusive at N-0.5: 12.5..13.499 -> 13, 13.5 -> 14), matching the
   table's stored bins so it feeds straight into `percentile_of_mark(age=...)`.
+- **`age_band_label(age)`** -> the band's range string ('12.5 - 13.5'), matching
+  the stored bin format for display in tables / hovers.
 - **`best_pb_by_ageband(results, dob, *, event=..., with_percentile=False, ...)`**
   -> best mark per Power-of-10 age band for one athlete/event (fastest for track,
-  farthest for field), one ascending row per band `{age_band, age, mark, date,
-  n}`. With `with_percentile=True` each row also carries its band percentile - a
+  farthest for field), one ascending row per band `{age_band, age_band_label,
+  age, mark, date, n}`. With `with_percentile=True` each row also carries its band percentile - a
   percentile-per-age-band series, the input shape for future trajectory modelling.
 
 First consumers: the endurance-dashboard Overview KPI tile (primary-event PB +
