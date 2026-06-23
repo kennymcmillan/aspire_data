@@ -2,6 +2,27 @@
 
 All notable changes to `aspire_data`.
 
+## [0.16.0] - 2026-06-23
+
+### Added - historical percentile norms (the band source for the benchmarking chart)
+
+`aspire_data.benchmarks` now reads the **historical Oracle norms**
+(`aspire_data_event_percentiles`, EVENT x AGE_BIN, mark at every 5% from
+p0=worst..p100=best, from the Power-of-10 PERCENTILE_RANK norms) and reshapes
+them into the percentile bands `aspire_dash.plots.percentile_age_chart` needs —
+so the corridor is real normative data, never computed from a small squad.
+Promoted from `development_dashboard/lib/percentiles.py` so every app shares it.
+
+- `standard_bands(event, *, age=None, pct=(10,25,50,75,90), elite=100, query=None)`
+  → `age` + `p{n}` columns (one row per age-bin centre), with implement / hurdle-
+  height variants chosen per age bin for throws and 110mH. Includes `p100` for the
+  chart's elite ceiling line.
+- `percentile_norms(query=None)` — the table as a DataFrame (process-cached on the
+  default Sports API path); `query(table, where, limit)` to reuse your app client.
+- `map_norm_event(event, age=None)` — canonical Event -> norm EVENT name.
+- `benchmark_inputs(...)` now also returns `bands` (from `standard_bands`) and
+  `pct`, so one call gives marks + bands + standard line + direction + format.
+
 ## [0.15.0] - 2026-06-22
 
 ### Added - benchmarks module (data layer for the aspire_dash benchmarking chart)
