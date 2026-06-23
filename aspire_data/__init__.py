@@ -22,6 +22,9 @@ Then grab whichever client(s) your app needs:
     from aspire_data.motherduck import duckdb_conn
     from aspire_data.posit import ConnectAdminClient
     from aspire_data.aspire_kb import kb_search, kb_sources, kb_stats
+    from aspire_data.anthro import anthro_summary
+    from aspire_data.skeletal import skeletal_summary
+    from aspire_data.vald import vald_summary, cmj_history, rjt_history
     from aspire_data.identity import resolve_to_sams
     from aspire_data.pinboard import publish_dataframe, read_pin
 
@@ -46,7 +49,7 @@ CLI
 """
 from __future__ import annotations
 
-__version__ = "0.16.0"
+__version__ = "0.18.0"
 
 __all__ = [
     "__version__",

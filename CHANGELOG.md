@@ -2,6 +2,69 @@
 
 All notable changes to `aspire_data`.
 
+## [0.18.0] - 2026-06-23
+
+### Added - `aspire_data.vald` (VALD-from-Oracle reads)
+
+One tested home for the VALD read logic that development_dashboard,
+endurance-dashboard, DASH_VALD and vald-vercel each re-implement. Promoted from
+`endurance-dashboard/data/vald_oracle.py`, generalised, and stripped of app
+concerns (no app cache, no live-API overlay, no pandas, pure-Python aggregation
+to keep the core dependency-free). Reads Oracle `vald_*` over the Sports API GET
+table route; identity resolves deterministically via `athlete_identifiers`.
+
+- **`vald_summary(player_id=... | mrn=...)`** - SAMS-resolved snapshot (latest CMJ
+  jump height + peak power, latest 10/5 RJT Tf/Tc, short trailing series). Fail
+  soft: `{matched: False}` with no vald_id, `{has_data: False}` when mapped but
+  no tests.
+- **`metric_history(vald_id, test_type, metric_name, limb='Trial')`** - per-session
+  best on ForceDecks `vald_result`.
+- **`cmj_history(vald_id, metric='Jump Height (Imp-Mom)')`** - CMJ convenience wrapper.
+- **`rjt_history(vald_id, field='tf_tc')`** - SmartSpeed 10/5 RJT from
+  `vald_smartspeed_result`. `RJT_FIELDS` maps tf_tc/contact/flight/height/rsi to the
+  bare SmartSpeed field + session-best aggregation (contact=min, rest=max). Tf/Tc is
+  `flightTimeOverContractionTime`, NOT `rsi`.
+- **`acute_chronic(vald_id, metric=..., test_type='CMJ')`** - daily mean + 7d/28d
+  rolling means + ACWR (HANA's FORCEDECK_ACUTE_CHRONIC shape, computed since Oracle
+  has no pre-calc).
+- **`asymmetry_history(vald_id, test_type, metric_name)`** - single-leg L/R
+  asymmetry from `trial_limb`: per-session `(R-L)/mean*100`.
+- **`squad_metric(vald_ids, test_type, metric_name)`** - one metric across many
+  athletes in ONE query (squad heatmaps / adaptive-range population). vald_id match
+  is case-insensitive (Oracle stores them upper-cased).
+
+NOTE: not yet wired into the consumer apps (next step is to repoint
+endurance-dashboard / development_dashboard at this module and delete their local
+copies). 10 hermetic tests in `tests/test_vald.py`.
+
+## [0.17.0] - 2026-06-23
+
+### Added - anthropometry + skeletal-age recall clients
+
+Two new recall modules, same shape as `whoop` / `firstbeat` (resolve by SAMS
+`player_id`, fail soft to an unmatched dict), so any squad app gets ISAK
+anthropometry and bone-age/maturity without re-reading Oracle or re-deriving the
+clinical math.
+
+- **`aspire_data.anthro.anthro_summary(player_id=...)`** — reads `anthro_records`
+  (one row per ISAK session, keyed by SAMS `player_id`; `mrn` fallback) and
+  returns the latest session snapshot + a stature/body-mass growth series +
+  the maturation (PHV) block. The derived block (BMI, sum-of-skinfolds, Durnin-
+  Womersley body density / %BF, FFM/FM, Heath-Carter somatotype) is computed in
+  the client. The ISAK math (`compute_calculated`, `heath_carter`,
+  `somatotype_string`, `get_result`) is **promoted verbatim from DASH_Anthro
+  `lib/`** so the formulas now live in one place; DASH_Anthro can delegate later.
+- **`aspire_data.skeletal.skeletal_summary(player_id=...)`** — reads
+  `aspire_data_skeletal_age` (one row per x-ray, keyed by `sams_id`; `mrn`
+  fallback) and returns the latest assessment + full history (GP/FELS/TW bone
+  ages, predicted adult height, % APH reached, maturity status, PHV band). Uses
+  the stored maturity/PHV values, recomputing only as a fallback via
+  `maturity_offset` (FELS - ChA), `maturity_status_from_offset` (+/-1 yr band)
+  and `phv_status_from_pct_aph` (Pre/Approaching/Circa/Post), all promoted from
+  DASH_Anthro `data/skeletal.py`.
+
+First consumer: the endurance dashboard Anthropometric tab.
+
 ## [0.16.0] - 2026-06-23
 
 ### Added - historical percentile norms (the band source for the benchmarking chart)
