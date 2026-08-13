@@ -20,6 +20,11 @@ USAGE
     api = SportsApi()
     rows = api.tool("search_athlete_anywhere", q="van Niekerk", limit=5)
     rows = api.tool("padel_rankings", year=2024, gender="men", limit=20)
+
+    # Subject records (plain REST, not the tool envelope)
+    rec  = api.record(10)                    # one athlete's stored record
+    idx  = api.subjects(q="tamimi")          # the picker index
+    dead = api.staleness(min_days=180, max_days=730)
 """
 from __future__ import annotations
 
@@ -142,7 +147,10 @@ class SportsApi:
         (e.g. /api/fencing/competitions/search, /api/service/match).
         Returns parsed JSON. Keeps auth/base/TLS handling here so apps
         never hand-roll requests for these surfaces."""
-        r = self._client.get(path, params=params or None)
+        # None means "not asked for". Forwarded, it becomes the literal string
+        # "None" in the query and is matched against the column as a value.
+        clean = {k: v for k, v in params.items() if v is not None}
+        r = self._client.get(path, params=clean or None)
         r.raise_for_status()
         return r.json()
 
@@ -152,6 +160,50 @@ class SportsApi:
         r = self._client.post(path, json=json, **kwargs)
         r.raise_for_status()
         return r.json()
+
+    # ------------------------------------------------------------------
+    # Subject records — the persisted, self-updating athlete/team record.
+    # Plain REST, not the tool envelope, so they get their own methods
+    # rather than being forced through `tool()`.
+    # ------------------------------------------------------------------
+
+    def record(self, subject_id: str, subject_type: str = "athlete",
+               flat: bool = True, include_payload: bool = True) -> dict:
+        """One subject's stored record.
+
+        `flat=True` adds `results_flat` to the sport block: every result row in
+        one shape, tagged `kind` = match | placing | fixture. Raw rows stay put
+        alongside it. Raises httpx.HTTPStatusError with 404 when the subject has
+        never been snapshotted — which is NOT the same as having no data.
+        """
+        return self.get(f"/api/records/{subject_type}/{subject_id}",
+                        flat=flat, include_payload=include_payload)
+
+    def subjects(self, q: str | None = None, sport: str | None = None,
+                 subject_type: str | None = None, limit: int = 1000,
+                 offset: int = 0) -> dict:
+        """The index of snapshotted subjects. `total` is a SQL count, not the
+        page length — read that, never `len(subjects)`."""
+        return self.get("/api/records/subjects", q=q, sport=sport,
+                        subject_type=subject_type, limit=limit, offset=offset)
+
+    def staleness(self, min_days: int = 180, max_days: int | None = None,
+                  limit: int = 50, sport: str | None = None,
+                  subject_type: str | None = None) -> dict:
+        """Subjects whose data has gone quiet. Pass `max_days` for RECENTLY
+        quiet — without it the permanently dormant head the list for ever."""
+        return self.get("/api/records/staleness", min_days=min_days,
+                        max_days=max_days, limit=limit, sport=sport,
+                        subject_type=subject_type)
+
+    def record_changes(self, hours: int = 168, limit: int = 500) -> dict:
+        """Recent change rows. For COUNTS use `record_changes_summary` — this
+        endpoint is capped and its length is a page size, not a total."""
+        return self.get("/api/records/changes", hours=hours, limit=limit)
+
+    def record_changes_summary(self, hours: int = 168) -> dict:
+        """Change counts by type, straight from SQL and uncapped."""
+        return self.get("/api/records/changes/summary", hours=hours)
 
     def openapi(self) -> dict:
         """Returns the OpenAPI spec — useful for tool discovery."""

@@ -60,3 +60,46 @@ def test_api_no_key_header_when_unset(mock_httpx, monkeypatch):
     from aspire_data.sports_api import SportsApi
     SportsApi()
     assert "X-API-Key" not in mock_httpx.instances[-1].headers
+
+
+# --------------------------------------------------------------------------
+# Subject records — plain REST, not the tool envelope
+# --------------------------------------------------------------------------
+
+def test_record_hits_the_rest_path_with_flat_on(mock_httpx):
+    from aspire_data.sports_api import SportsApi
+    api = SportsApi()
+    api.record(10)
+    method, path, kwargs = mock_httpx.instances[-1].calls[0]
+    assert method == "GET"
+    assert path == "/api/records/athlete/10"
+    assert kwargs["params"] == {"flat": True, "include_payload": True}
+
+
+def test_record_can_address_a_team(mock_httpx):
+    from aspire_data.sports_api import SportsApi
+    api = SportsApi()
+    api.record("QAT-epee-men-senior", subject_type="team")
+    _, path, _ = mock_httpx.instances[-1].calls[0]
+    assert path == "/api/records/team/QAT-epee-men-senior"
+
+
+def test_none_params_are_dropped_not_sent_as_null(mock_httpx):
+    # A literal ?sport=None would be matched against the column as the string
+    # "None" and quietly return nothing.
+    from aspire_data.sports_api import SportsApi
+    api = SportsApi()
+    api.subjects(q="tamimi")
+    _, path, kwargs = mock_httpx.instances[-1].calls[0]
+    assert path == "/api/records/subjects"
+    assert "sport" not in kwargs["params"]
+    assert kwargs["params"]["q"] == "tamimi"
+
+
+def test_staleness_passes_the_window_through(mock_httpx):
+    from aspire_data.sports_api import SportsApi
+    api = SportsApi()
+    api.staleness(min_days=180, max_days=730)
+    _, path, kwargs = mock_httpx.instances[-1].calls[0]
+    assert path == "/api/records/staleness"
+    assert kwargs["params"]["max_days"] == 730
