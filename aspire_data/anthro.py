@@ -229,7 +229,12 @@ def anthro_summary(*, player_id=None, mrn=None, limit: int = 2000) -> dict:
                       key=lambda s: str(s.get("date") or ""))
 
     growth = [{"date": s["date"], "stature": s["stature"],
-               "body_mass": s["body_mass"], "bmi": s["bmi"]}
+               "body_mass": s["body_mass"], "bmi": s["bmi"],
+               # carry the derived body-composition measures per session too, so
+               # consumers can tabulate them longitudinally (not just the snapshot):
+               "sum8": s.get("sum8"), "sum4": s.get("sum4"),
+               "sitting_height": s.get("sitting_height"),
+               "percent_bf": s.get("percent_bf")}
               for s in sessions if s["stature"] is not None or s["body_mass"] is not None]
 
     latest = sessions[-1]
