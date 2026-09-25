@@ -123,6 +123,17 @@ def test_find_live_lru_follows_helpers_and_allows_client_factories(tmp_path):
     assert hits == ["physio.py:11 curve_by_date -> _df() -> _raw() -> call("], hits
 
 
+def test_client_that_fetches_is_not_a_factory(tmp_path):
+    """`return SportsApi().tool(...)` fetches data; only a bare constructor is exempt."""
+    _write(tmp_path, "d.py", """
+        from functools import lru_cache
+        @lru_cache
+        def squad():
+            return SportsApi().tool("x")
+    """)
+    assert [h.split(" ")[1] for h in C.find_live_lru(tmp_path)] == ["squad"]
+
+
 def test_find_live_lru_clean_repo(tmp_path):
     _write(tmp_path, "data.py", """
         from aspire_data.cache import ttl_cache, TTL_LIVE

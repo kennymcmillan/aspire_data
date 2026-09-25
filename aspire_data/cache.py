@@ -193,7 +193,7 @@ _LIVE = _re.compile(
 _LRU = {"lru_cache", "cache"}
 # A no-arg function that just builds/returns a client (SamsClient(), SportsApi(),
 # a MultiFernet, a connection pool) caches an object, not data: allowed.
-_CLIENT_FACTORY = _re.compile(r"return\s+\w*(Client|Api|API|Fernet|Pool|pool|Session|Engine)\s*\(")
+_CLIENT_FACTORY = _re.compile(r"return\s+\w*(?:Client|Api|API|Fernet|Pool|pool|Session|Engine)\([^()]*\)\s*$", _re.M)
 _SKIP_DIRS = {".venv", "venv", "site-packages", "node_modules", "__pycache__", ".git",
               "build", "dist", "tests", ".claude", "_vendor", "scripts"}
 

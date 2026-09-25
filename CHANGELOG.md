@@ -2,6 +2,12 @@
 
 All notable changes to `aspire_data`.
 
+## [0.22.1] - 2026-09-25
+
+### Fixed
+- `find_live_lru`: a no-arg function returning `SportsApi().tool(...)` was mistaken for a
+  client factory. Only a bare constructor (`return SamsClient()`) is exempt now.
+
 ## [0.22.0] - 2026-09-25
 
 ### Added - stale-cache guard + "data as of"
