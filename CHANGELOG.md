@@ -2,6 +2,29 @@
 
 All notable changes to `aspire_data`.
 
+## [0.21.0] - 2026-09-25
+
+### Added - `aspire_data.cache.ttl_cache`: the one expiring cache for app data readers
+
+Apps cached SAMS / Oracle / Sports API readers with `functools.lru_cache`, which
+never expires: a long-lived Posit Connect worker served its startup snapshot, so
+new Vyntus aerobic tests, anthro tests and Firstbeat sessions stayed hidden until
+a restart (endurance, 2026-09-25). Each app had also hand-rolled a fix
+(endurance `memoize_nonempty`, development `ttl_cache`); this replaces both.
+
+- `@ttl_cache(ttl, *, shared=None, skip_empty=True, maxsize=512)`: per-argument
+  cache that expires in EVERY layer; optional cross-worker `shared` store (a
+  flask_caching `Cache`, anything with get/set/delete); never pins an empty result
+  (`[]`, `{}`, `None`, empty DataFrame, dict of empties) so a blip retries.
+- `fn.invalidate(*args)` (per-entry Refresh), `fn.cache_clear()`, `clear_all()`.
+- `has_data(value)`: the DataFrame-safe emptiness check.
+- Presets `TTL_LIVE` 900 s, `TTL_HOURLY` 3600 s, `TTL_DAILY` 86400 s.
+- Rule: plain `lru_cache` only for client objects and files bundled with the app.
+
+### Fixed
+- `benchmarks._standards` (standards pin read) used `lru_cache`: a republished
+  pin never showed until restart. Now `ttl_cache(TTL_HOURLY)`.
+
 ## [0.19.0] - 2026-06-23
 
 ### Added - `benchmarks` percentile toolkit (`percentile_of_mark` + age-band PBs)

@@ -30,6 +30,7 @@ Then grab whichever client(s) your app needs:
     from aspire_data.benchmarks import (benchmark_inputs, percentile_of_mark,
                                          best_pb_by_ageband, age_band_centre,
                                          age_band_label)
+    from aspire_data.cache import ttl_cache, TTL_LIVE   # cache ANY live-data reader
 
 Most clients read env vars on construction. Pattern:
 
@@ -52,7 +53,7 @@ CLI
 """
 from __future__ import annotations
 
-__version__ = "0.20.0"
+__version__ = "0.21.0"
 
 __all__ = [
     "__version__",

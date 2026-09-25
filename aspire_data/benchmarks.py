@@ -22,7 +22,7 @@ from __future__ import annotations
 import datetime as _dt
 import logging
 import re
-from functools import lru_cache
+from .cache import ttl_cache, TTL_HOURLY
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ def marks_from_results(results, dob, *, date_col="Start_Date",
     return out
 
 
-@lru_cache(maxsize=4)
+@ttl_cache(TTL_HOURLY)  # was @lru_cache: a republished standards pin never showed
 def _standards(pin: str):
     import pandas as pd
     try:
