@@ -2,6 +2,23 @@
 
 All notable changes to `aspire_data`.
 
+## [0.22.0] - 2026-09-25
+
+### Added - stale-cache guard + "data as of"
+
+- **`find_live_lru(root)`**: static scan for `@lru_cache` / `@functools.cache` on a
+  function that reads live data (Sports API, SAMS, httpx, pins, HANA, SQL), following
+  same-module helpers two hops (`curve_by_date -> _df -> _raw -> call(...)`).
+  Allowed: time-bucket args (`_b`), no-arg client factories (`return SamsClient()`),
+  bundled-file readers, and anything marked `# lru-ok: <reason>`. Apps add one test:
+  `assert find_live_lru(ROOT) == []`. Validated: flags all 16 readers in endurance
+  before 2026-09-25 and all 9 in medical; 0 across 17 current app repos.
+- **`fn.fetched_at(*args)`** and **`data_as_of(*fns)`**: the real upstream fetch time
+  of cached entries (the oldest valid one = the honest "data as of" for a page).
+- Shared-layer entries now carry their fetch time under a new `aspire_data.cache.v2:`
+  prefix, so a worker reading another worker's entry reports the true time and
+  still honours the TTL. 0.21.0 entries are simply not read (one refetch after upgrade).
+
 ## [0.21.0] - 2026-09-25
 
 ### Added - `aspire_data.cache.ttl_cache`: the one expiring cache for app data readers
