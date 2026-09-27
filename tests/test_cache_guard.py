@@ -94,6 +94,23 @@ def test_single_flight_empty_result_lets_waiters_retry():
     assert read() == [] and read() == [1] and n["c"] == 2
 
 
+def test_refresh_swaps_in_new_value_and_keeps_old_on_blip():
+    src = {"v": [1]}
+
+    @C.ttl_cache(600)
+    def read():
+        return list(src["v"])
+
+    assert read() == [1]
+    src["v"] = [2]
+    assert read() == [1]                 # still cached
+    assert read.refresh() == [2]
+    assert read() == [2]                 # swapped in, no invalidate window
+    src["v"] = []                        # upstream blip
+    read.refresh()
+    assert read() == [2]                 # old value kept
+
+
 def test_find_live_lru_flags_live_readers_only(tmp_path):
     _write(tmp_path, "data/physio.py", """
         from functools import lru_cache

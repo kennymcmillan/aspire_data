@@ -135,6 +135,25 @@ def ttl_cache(ttl: int = TTL_LIVE, *, shared: Any = None, skip_empty: bool = Tru
             # RLock per distinct key is negligible.
             return value
 
+        def refresh(*args, **kwargs):
+            """Fetch fresh NOW and swap it in; the old value keeps serving readers
+            while this runs (for a background timer, so no request ever waits on a
+            cold rebuild). An empty/blip result leaves the old value in place."""
+            k = _key(args, kwargs)
+            now = time.time()
+            value = fn(*args, **kwargs)
+            if _keep(value):
+                with lock:
+                    if len(local) >= maxsize and k not in local:
+                        local.pop(min(local, key=lambda kk: local[kk][0]), None)
+                    local[k] = (now, value, now)
+                if shared is not None:
+                    try:
+                        shared.set(prefix + repr(k), (now, value), timeout=ttl)
+                    except Exception:  # noqa: BLE001
+                        pass
+            return value
+
         def invalidate(*args, **kwargs):
             """Drop one entry (both layers) so the next call refetches."""
             k = _key(args, kwargs)
@@ -165,6 +184,7 @@ def ttl_cache(ttl: int = TTL_LIVE, *, shared: Any = None, skip_empty: bool = Tru
             return min(ts) if ts else None
 
         wrap.invalidate = invalidate
+        wrap.refresh = refresh
         wrap.fetched_at = fetched_at
         wrap._oldest_valid = _oldest_valid
         wrap.cache_clear = cache_clear

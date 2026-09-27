@@ -2,6 +2,12 @@
 
 All notable changes to `aspire_data`.
 
+## [0.22.3] - 2026-09-27
+
+### Added
+- `fn.refresh(*args)`: fetch fresh and swap it in while the old value keeps serving (for a
+  background timer, so no request waits on a cold rebuild); an empty/blip result keeps the old value.
+
 ## [0.22.2] - 2026-09-27
 
 ### Added
