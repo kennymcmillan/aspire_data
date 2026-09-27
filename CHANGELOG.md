@@ -2,6 +2,14 @@
 
 All notable changes to `aspire_data`.
 
+## [0.22.2] - 2026-09-27
+
+### Added
+- `ttl_cache` single-flight: concurrent cold callers of the same key wait for the first
+  fetch instead of all hitting upstream (endurance first load built its live squad 3x in
+  parallel; Group Overview ~50% duplicate SAMS calls). Per-key RLock; different keys still
+  run in parallel; an empty (blip) result is still never cached.
+
 ## [0.22.1] - 2026-09-25
 
 ### Fixed

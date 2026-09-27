@@ -82,6 +82,7 @@ def ttl_cache(ttl: int = TTL_LIVE, *, shared: Any = None, skip_empty: bool = Tru
         prefix = f"aspire_data.cache.v2:{fn.__module__}.{fn.__qualname__}:"
         local: dict[tuple, tuple[float, Any, float]] = {}   # key -> (stored_at, value, fetched_at)
         lock = threading.Lock()
+        inflight: dict[tuple, threading.RLock] = {}          # key -> single-flight lock
 
         def _key(args, kwargs):
             return args + tuple(sorted(kwargs.items())) if kwargs else args
@@ -107,17 +108,31 @@ def ttl_cache(ttl: int = TTL_LIVE, *, shared: Any = None, skip_empty: bool = Tru
                     with lock:
                         local[k] = (now, hit[1], hit[0])
                     return hit[1]
-            value = fn(*args, **kwargs)
-            if _keep(value):
+            # Single-flight (0.22.2): concurrent cold callers of the SAME key wait for
+            # the first one's fetch instead of all hitting upstream (endurance first
+            # load ran load_athletes 3x in parallel). RLock: same-thread re-entry is safe.
+            with lock:
+                key_lock = inflight.setdefault(k, threading.RLock())
+            with key_lock:
                 with lock:
-                    if len(local) >= maxsize and k not in local:
-                        local.pop(min(local, key=lambda kk: local[kk][0]), None)
-                    local[k] = (now, value, now)
-                if shared is not None:
-                    try:
-                        shared.set(prefix + repr(k), (now, value), timeout=ttl)
-                    except Exception:  # noqa: BLE001
-                        pass
+                    box = local.get(k)
+                if box is not None and time.time() - box[2] < ttl:
+                    return box[1]                 # filled while we waited
+                now = time.time()
+                value = fn(*args, **kwargs)
+                if _keep(value):
+                    with lock:
+                        if len(local) >= maxsize and k not in local:
+                            local.pop(min(local, key=lambda kk: local[kk][0]), None)
+                        local[k] = (now, value, now)
+                    if shared is not None:
+                        try:
+                            shared.set(prefix + repr(k), (now, value), timeout=ttl)
+                        except Exception:  # noqa: BLE001
+                            pass
+            # The per-key lock is kept (never popped): popping while another thread
+            # still waits on it would let a third caller fetch in parallel. One tiny
+            # RLock per distinct key is negligible.
             return value
 
         def invalidate(*args, **kwargs):

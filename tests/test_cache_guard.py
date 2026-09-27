@@ -57,6 +57,43 @@ def _write(tmp_path, name, body):
     p.write_text(textwrap.dedent(body), encoding="utf-8")
 
 
+def test_single_flight_concurrent_cold_callers_fetch_once():
+    """0.22.2: N threads asking for the same cold key -> ONE upstream fetch."""
+    import threading
+    import time as _t
+    calls = []
+
+    @C.ttl_cache(600)
+    def slow(k):
+        calls.append(k)
+        _t.sleep(0.2)
+        return [k]
+
+    out = []
+    ts = [threading.Thread(target=lambda: out.append(slow("a"))) for _ in range(8)]
+    for t in ts: t.start()
+    for t in ts: t.join()
+    assert calls == ["a"] and out == [["a"]] * 8
+    # different keys still run in parallel (no global serialisation)
+    t0 = _t.time()
+    ts = [threading.Thread(target=slow, args=(f"k{i}",)) for i in range(4)]
+    for t in ts: t.start()
+    for t in ts: t.join()
+    assert _t.time() - t0 < 0.6
+
+
+def test_single_flight_empty_result_lets_waiters_retry():
+    """A blip (empty) is not cached; the next caller refetches (not pinned)."""
+    n = {"c": 0}
+
+    @C.ttl_cache(600)
+    def read():
+        n["c"] += 1
+        return [] if n["c"] == 1 else [1]
+
+    assert read() == [] and read() == [1] and n["c"] == 2
+
+
 def test_find_live_lru_flags_live_readers_only(tmp_path):
     _write(tmp_path, "data/physio.py", """
         from functools import lru_cache
