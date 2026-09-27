@@ -28,12 +28,14 @@ NOTES
 """
 from __future__ import annotations
 
-__all__ = ['SamsClient', 'SamsError', 'DEFAULT_SPORTS', 'first_target_event']
+__all__ = ['SamsClient', 'SamsError', 'DEFAULT_SPORTS', 'first_target_event',
+           'resolve_photo_url', 'fetch_photo', 'fetch_photos', 'PHOTO_USER_AGENT']
 
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from datetime import date, timedelta
+from urllib.parse import urlsplit
 
 import httpx
 from cachetools import TTLCache
@@ -91,6 +93,76 @@ def first_target_event(raw: str | None) -> str | None:
 
 class SamsError(RuntimeError):
     """Raised on SAMS 4xx/5xx — carries the response detail."""
+
+
+# ── Athlete photos ───────────────────────────────────────────────────────────
+# SAMS profileImageUrl comes in three shapes (checked across 164 athletes, 2026-09-27):
+#   1. a public blob URL (most athletes)              -> used as is
+#   2. an https URL on the SAMS web host /uploads/    -> used as is, BUT the host answers 403 to the
+#      python-requests default user-agent, so a server-side fetch (PDF, email) must name itself
+#   3. a bare file name, e.g. "123.jpg?t=224"         -> lives in {SAMS web root}/uploads/player-images/
+#   4. a relative path "uploads/player-images/123.jpg?t=224" -> same folder
+# Browsers load all three; server-side renderers (PDF/email) should use fetch_photo(s), which never
+# raise: a missing photo means initials, never a failed report.
+PHOTO_USER_AGENT = "aspire_data (athlete photos)"
+_PHOTO_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
+_photo_cache: TTLCache = TTLCache(maxsize=2000, ttl=6 * 3600)    # successes only
+
+
+def resolve_photo_url(raw, *, base_url: str | None = None) -> str:
+    """Normalise a SAMS photo value to a fetchable https URL, or '' (initials).
+
+    base_url: the SAMS API base (e.g. SamsClient.base_url); defaults to SAMS_BASE_URL. Only its
+    scheme + host are used, to place bare file names under /uploads/player-images/."""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    if s.startswith("https://"):
+        return s
+    for prefix in ("/uploads/player-images/", "uploads/player-images/"):     # shape 4: relative path
+        if s.startswith(prefix):
+            s = s[len(prefix):]
+            break
+    name = s.split("?", 1)[0]
+    if "://" in s or "/" in name or "\\" in name or not name.lower().endswith(_PHOTO_EXTS):
+        return ""                                          # http://, paths, javascript:, junk
+    root = urlsplit(base_url or os.environ.get("SAMS_BASE_URL", ""))
+    if root.scheme != "https" or not root.netloc:
+        return ""
+    return f"https://{root.netloc}/uploads/player-images/{s}"
+
+
+def fetch_photo(url: str, *, timeout: float = 4.0) -> bytes | None:
+    """Image bytes for a resolved photo URL, or None. Named user-agent; never raises; successes
+    are cached 6 h (failures are not, so a transient error retries next time)."""
+    if not url or not str(url).startswith("https://"):
+        return None
+    hit = _photo_cache.get(url)
+    if hit is not None:
+        return hit
+    try:
+        r = httpx.get(url, timeout=timeout, follow_redirects=True,
+                      headers={"User-Agent": PHOTO_USER_AGENT, "Accept": "image/*"})
+    except httpx.HTTPError:
+        return None
+    if r.status_code != 200 or not r.headers.get("content-type", "").startswith("image/") or not r.content:
+        return None
+    _photo_cache[url] = r.content
+    return r.content
+
+
+def fetch_photos(urls, *, max_workers: int = 8, deadline: float = 8.0) -> dict[str, bytes | None]:
+    """{url: bytes | None} for many URLs in parallel. Anything unfinished at `deadline` seconds is
+    None, so a slow host delays a report by at most `deadline`, never fails it."""
+    todo = list(dict.fromkeys(u for u in urls if u))
+    if not todo:
+        return {}
+    ex = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="sams-photo")
+    futs = {ex.submit(fetch_photo, u): u for u in todo}
+    done, _ = wait(futs, timeout=deadline)
+    got = {futs[f]: f.result() for f in done}
+    ex.shutdown(wait=False, cancel_futures=True)
+    return {u: got.get(u) for u in todo}
 
 
 class SamsClient:
@@ -176,7 +248,8 @@ class SamsClient:
             "mrn": str(row["mrn"]) if row.get("mrn") is not None else None,
             "sport_id": int(sid) if sid is not None else None,
             "sport": self.sports.get(int(sid)) if sid is not None else None,
-            "photo_url": row.get("imageUrl") or row.get("profileImageUrl"),
+            "photo_url": resolve_photo_url(row.get("imageUrl") or row.get("profileImageUrl"),
+                                           base_url=self.base_url) or None,
             "is_active": row.get("isActive"),
         }
 
@@ -249,7 +322,8 @@ class SamsClient:
             "sex": _flatten(row.get("gender")),
             "sport_id": int(sid) if sid is not None else None,
             "sport": self.sports.get(int(sid)) if sid is not None else None,
-            "photo_url": row.get("profileImageUrl") or row.get("imageUrl"),
+            "photo_url": resolve_photo_url(row.get("profileImageUrl") or row.get("imageUrl"),
+                                           base_url=self.base_url) or None,
             "is_active": row.get("isActive"),
             "pathway": row.get("pathway"),
             "is_target": (row.get("pathway") == "Target") if row.get("pathway") else None,

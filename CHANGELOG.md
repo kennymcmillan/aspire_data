@@ -2,6 +2,21 @@
 
 All notable changes to `aspire_data`.
 
+## [0.23.0] - 2026-09-27
+
+### Added
+- `aspire_data.sams.resolve_photo_url(raw, base_url=None)`: normalises the four shapes SAMS returns for
+  `profileImageUrl` (public blob URL; https on the SAMS web host; bare file name; relative
+  `uploads/player-images/...` path) to one https URL, or `""` for anything unsafe (http, javascript:,
+  paths). The SAMS web root comes from `base_url` / `SAMS_BASE_URL`, never hard-coded.
+- `fetch_photo(url)` / `fetch_photos(urls, deadline=8)`: server-side photo bytes for PDFs and emails.
+  Named user-agent (the SAMS web host answers 403 to the python-requests default), never raises,
+  successes cached 6 h, a slow host delays a report by at most `deadline`.
+
+### Changed
+- `SamsClient` search hits and athlete context now return a resolved `photo_url` (or `None`).
+  Checked live 2026-09-27: 160 of 160 SAMS photo values resolve, 159 fetch (1 file missing upstream).
+
 ## [0.22.3] - 2026-09-27
 
 ### Added
