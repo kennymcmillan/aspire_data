@@ -2,6 +2,17 @@
 
 All notable changes to `aspire_data`.
 
+## [0.24.0] - 2026-09-28
+
+### Added
+- `aspire_data.feedback`: the site feedback store behind `aspire_dash.site_feedback`. One Connect pin
+  per app (`site_feedback__<app>`); `read_all_feedback()` merges every app's pin into one inbox.
+  `FeedbackStore(app).add / set_status / load`: in-memory copy + one background writer; each change
+  is a per-row operation replayed on a fresh pin read, so another instance's work is never
+  overwritten and a stale page cannot undo a status. A failed write is kept and replayed with the
+  next change. Pin only on Connect (a laptop with a Connect key writes a local file).
+  `legacy_pin=` reads an app's old pin (e.g. `medical_dashboard_feedback`) until the new one exists.
+
 ## [0.23.0] - 2026-09-27
 
 ### Added
