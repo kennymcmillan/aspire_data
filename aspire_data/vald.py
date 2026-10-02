@@ -87,26 +87,41 @@ def _q_guid(guid) -> str:
     return sql_literal(_safe_guid(guid).upper())
 
 
+API_MAX_ROWS = 20000  # /api/v1/table rejects limit > 20000 with a 422
+
+
 def _table(name: str, *, where: str | None = None, limit: int = 20000,
-           columns: str | None = None) -> list[dict]:
+           columns: str | None = None, order_by: str | None = None) -> list[dict]:
     """Read base-table rows via the Sports API GET route. Raises VALDError on
     transport failure; an empty result is a normal [].
 
     ``columns`` asks for only those fields: on ``vald_result`` (4.5 GB) a covering
     index then serves the read without fetching full rows (a 41,628-row population
     read went from 16.5 s on SELECT *). An API without the parameter ignores it
-    and returns every column, so callers read the same keys either way."""
-    params: dict = {"limit": limit}
+    and returns every column, so callers read the same keys either way.
+
+    A ``limit`` above the API cap is read in API_MAX_ROWS pages by offset, ordered
+    on ``order_by`` so the pages neither overlap nor skip rows."""
+    params: dict = {"limit": min(limit, API_MAX_ROWS)}
     if where:
         params["where"] = where
     if columns:
         params["columns"] = columns
-    try:
-        r = _common.get(f"/api/v1/table/{name}", params=params, timeout=30.0)
-        r.raise_for_status()
-        return r.json().get("data") or []
-    except Exception as e:  # noqa: BLE001
-        raise VALDError(str(e)) from e
+    if order_by:
+        params["order_by"] = order_by
+    out: list[dict] = []
+    while True:
+        try:
+            r = _common.get(f"/api/v1/table/{name}", params=params, timeout=30.0)
+            r.raise_for_status()
+            page = r.json().get("data") or []
+        except Exception as e:  # noqa: BLE001
+            raise VALDError(str(e)) from e
+        out.extend(page)
+        if len(page) < params["limit"] or len(out) >= limit:
+            return out[:limit]
+        params["offset"] = len(out)
+        params["limit"] = min(API_MAX_ROWS, limit - len(out))
 
 
 def _session_best(rows, date_key: str, agg: str = "max") -> list[dict]:
@@ -241,7 +256,7 @@ def squad_metric(vald_ids, test_type, metric_name, *, limb: str = "Trial",
              f"AND metric_name = {sql_literal(metric_name)} "
              f"AND limb = {sql_literal(limb)}")
     rows = _table("vald_result", where=where, limit=limit,
-                  columns="vald_id,recorded_date,value")
+                  columns="vald_id,recorded_date,value", order_by="row_uid")
     grouped: dict[str, list] = {g: [] for g in guids}
     by_athlete: dict[str, list] = {}
     for row in rows:

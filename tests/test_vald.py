@@ -211,3 +211,35 @@ def test_each_reader_asks_only_for_the_fields_it_reads(monkeypatch, call, cols):
     monkeypatch.setattr(vald._common, "get", lambda path, params=None, timeout=None: seen.append(params) or R())
     call(vald)
     assert seen and seen[0].get("columns") == cols
+
+
+def test_squad_metric_pages_under_the_api_row_cap(monkeypatch):
+    """The live route rejects limit > 20000 (422); a 41,628-row population must come back whole by offset paging."""
+    from aspire_data import vald
+    total = 45000
+    rows = [{"vald_id": GUID.upper(), "recorded_date": f"2026-01-{1 + i % 28:02d}T00:00:00", "value": i}
+            for i in range(total)]
+    seen = []
+
+    class R:
+        def __init__(self, data, status=200):
+            self.data, self.status = data, status
+
+        def raise_for_status(self):
+            if self.status != 200:
+                raise RuntimeError(f"HTTP {self.status}")
+
+        def json(self):
+            return {"data": self.data}
+
+    def get(path, params=None, timeout=None):
+        seen.append(dict(params))
+        if params["limit"] > 20000:
+            return R([], 422)
+        off = int(params.get("offset", 0))
+        return R(rows[off:off + params["limit"]])
+    monkeypatch.setattr(vald._common, "get", get)
+    out = vald.squad_metric([GUID], "CMJ", "Jump Height (Imp-Mom)")
+    assert sum(s["n"] for s in out[GUID]) == total
+    assert all(p["limit"] <= 20000 for p in seen) and len(seen) == 3
+    assert all(p.get("order_by") == "row_uid" for p in seen)
