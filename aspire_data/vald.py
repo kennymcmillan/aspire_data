@@ -87,12 +87,20 @@ def _q_guid(guid) -> str:
     return sql_literal(_safe_guid(guid).upper())
 
 
-def _table(name: str, *, where: str | None = None, limit: int = 20000) -> list[dict]:
+def _table(name: str, *, where: str | None = None, limit: int = 20000,
+           columns: str | None = None) -> list[dict]:
     """Read base-table rows via the Sports API GET route. Raises VALDError on
-    transport failure; an empty result is a normal []."""
+    transport failure; an empty result is a normal [].
+
+    ``columns`` asks for only those fields: on ``vald_result`` (4.5 GB) a covering
+    index then serves the read without fetching full rows (a 41,628-row population
+    read went from 16.5 s on SELECT *). An API without the parameter ignores it
+    and returns every column, so callers read the same keys either way."""
     params: dict = {"limit": limit}
     if where:
         params["where"] = where
+    if columns:
+        params["columns"] = columns
     try:
         r = _common.get(f"/api/v1/table/{name}", params=params, timeout=30.0)
         r.raise_for_status()
@@ -131,7 +139,8 @@ def metric_history(vald_id, test_type, metric_name, *, limb: str = "Trial",
              f"AND test_type = {sql_literal(test_type)} "
              f"AND metric_name = {sql_literal(metric_name)} "
              f"AND limb = {sql_literal(limb)}")
-    return _session_best(_table("vald_result", where=where, limit=limit),
+    return _session_best(_table("vald_result", where=where, limit=limit,
+                                columns="recorded_date,value"),
                          "recorded_date")
 
 
@@ -150,7 +159,7 @@ def acute_chronic(vald_id, *, metric: str = CMJ_DEFAULT, test_type: str = "CMJ",
     where = (f"vald_id = {_q_guid(vald_id)} "
              f"AND test_type = {sql_literal(test_type)} "
              f"AND metric_name = {sql_literal(metric)} AND limb = 'Trial'")
-    rows = _table("vald_result", where=where)
+    rows = _table("vald_result", where=where, columns="recorded_date,value")
     sums: dict[str, list] = {}
     for row in rows:
         v = _num(row.get("value"))
@@ -193,7 +202,8 @@ def asymmetry_history(vald_id, test_type, metric_name, *,
              f"AND test_type = {sql_literal(test_type)} "
              f"AND metric_name = {sql_literal(metric_name)} "
              f"AND trial_limb IN ('Left', 'Right')")
-    rows = _table("vald_result", where=where, limit=limit)
+    rows = _table("vald_result", where=where, limit=limit,
+                  columns="recorded_date,value,trial_limb")
     by_date: dict[str, dict] = {}
     for row in rows:
         v = _num(row.get("value"))
@@ -230,7 +240,8 @@ def squad_metric(vald_ids, test_type, metric_name, *, limb: str = "Trial",
              f"AND test_type = {sql_literal(test_type)} "
              f"AND metric_name = {sql_literal(metric_name)} "
              f"AND limb = {sql_literal(limb)}")
-    rows = _table("vald_result", where=where, limit=limit)
+    rows = _table("vald_result", where=where, limit=limit,
+                  columns="vald_id,recorded_date,value")
     grouped: dict[str, list] = {g: [] for g in guids}
     by_athlete: dict[str, list] = {}
     for row in rows:

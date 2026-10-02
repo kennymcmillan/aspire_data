@@ -188,3 +188,26 @@ def test_vald_summary_unmatched_when_no_vald_id(mock_httpx):
     cli = mock_httpx.instances[-1]
     cli.set_response(json_body=_data([{"sams_player_id": 2930}]))  # no vald_id
     assert vald.vald_summary(player_id=2930) == {"matched": False}
+
+
+# ---------- columns= (2026-10-02: covering-index reads on vald_result) ----------
+
+@pytest.mark.parametrize("call,cols", [
+    (lambda v: v.metric_history(GUID, "CMJ", "Jump Height (Imp-Mom)"), "recorded_date,value"),
+    (lambda v: v.acute_chronic(GUID), "recorded_date,value"),
+    (lambda v: v.asymmetry_history(GUID, "SLJ", "Jump Height (Imp-Mom)"), "recorded_date,value,trial_limb"),
+    (lambda v: v.squad_metric([GUID], "CMJ", "Jump Height (Imp-Mom)"), "vald_id,recorded_date,value"),
+])
+def test_each_reader_asks_only_for_the_fields_it_reads(monkeypatch, call, cols):
+    from aspire_data import vald
+    seen = []
+
+    class R:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"data": []}
+    monkeypatch.setattr(vald._common, "get", lambda path, params=None, timeout=None: seen.append(params) or R())
+    call(vald)
+    assert seen and seen[0].get("columns") == cols
