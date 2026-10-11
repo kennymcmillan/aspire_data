@@ -2,6 +2,17 @@
 
 All notable changes to `aspire_data`.
 
+## [0.25.0] - 2026-10-11
+
+### Added
+- `aspire_data.athlete_record`: one reader for everything the Sports API holds on an athlete.
+  `athlete_record(api, id)` reads the stored record in sections (`blocks=`) plus the report card,
+  in parallel, ttl-cached per section; `prefetch()` warms the heavy sections. Properties:
+  `short_summary`, `long_summary`, `headline_line`, `claims`, `context`, `honours`, `peers`,
+  `career`, `rankings`, `results` (results_flat, newest first), `personal_bests`, `season_bests`,
+  `testing`, `knowledge`, `report`, `classification` (once the record stores it). A failed section
+  is empty and listed in `.errors`, never raised, never cached.
+
 ## [0.24.0] - 2026-09-28
 
 ### Added
