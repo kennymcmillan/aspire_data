@@ -186,7 +186,8 @@ _IMPLEMENT_BY_AGE = {
     "Javelin Throw": [(12, "(400g)"), (14, "(500g)"), (16, "(600g)"),
                       (18, "(700g)"), (999, "(800g)")],
     "110mH":         [(16, "(84cm)"), (18, "(91cm)"), (20, "(99cm)"), (999, "")],
-    "400mH":         [(18, "(84cm)"), (999, "")],          # boys U18 run 84 cm, U20 and seniors 91.4 cm
+    # 400mH: no (84cm) variant on purpose. Its rows for ages 15-20 are corrupt in the norms table (p50 ~110-119 s,
+    # checked 2026-10-11); the plain 400mH norms are sane from age 14, so every age reads those.
 }
 
 _NORMS_DF = None   # process cache for the default-query path (static reference)

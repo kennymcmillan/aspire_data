@@ -180,7 +180,7 @@ def test_bad_dob_returns_empty():
 
 def test_hurdles_and_steeple_map_to_their_norms_with_youth_heights():
     from aspire_data.benchmarks import map_norm_event
-    assert map_norm_event("400m Hurdles", 17) == "400mH (84cm)"
+    assert map_norm_event("400m Hurdles", 17) == "400mH"          # (84cm) rows are corrupt: never used
     assert map_norm_event("400m Hurdles", 19) == "400mH"
     assert map_norm_event("3000m Steeplechase") == "3000mSC"
     assert map_norm_event("4 x 400m") is None
