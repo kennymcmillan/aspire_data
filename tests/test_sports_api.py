@@ -123,3 +123,20 @@ def test_staleness_passes_the_window_through(mock_httpx):
     _, path, kwargs = mock_httpx.instances[-1].calls[0]
     assert path == "/api/records/staleness"
     assert kwargs["params"]["max_days"] == 730
+
+
+def test_user_agent_names_the_connect_app(monkeypatch):
+    """The API's log-only gate mode names WHICH Connect app called (all share Posit's IP)."""
+    import aspire_data
+    from aspire_data.sports_api import SportsApi
+    monkeypatch.setenv("CONNECT_CONTENT_GUID", "8119edda-e6d3-493b-b3cf-8a723fde4576")
+    ua = SportsApi(base_url="https://x.invalid")._client.headers["User-Agent"]
+    assert ua == f"aspire_data/{aspire_data.__version__} (connect:8119edda-e6d3-493b-b3cf-8a723fde4576)"
+
+
+def test_user_agent_off_connect_names_the_host(monkeypatch):
+    import socket
+    from aspire_data.sports_api import SportsApi
+    monkeypatch.delenv("CONNECT_CONTENT_GUID", raising=False)
+    ua = SportsApi(base_url="https://x.invalid")._client.headers["User-Agent"]
+    assert ua.endswith(f"(local:{socket.gethostname()})") and ua.startswith("aspire_data/")

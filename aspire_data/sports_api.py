@@ -58,6 +58,16 @@ def sql_literal(v: Any) -> str:
     return f"'{s}'"
 
 
+def _user_agent() -> str:
+    """Names the caller so the API's gate log can tell apps apart (every Connect app shares
+    Posit's IP): "aspire_data/<ver> (connect:<content guid>)" on Connect, else "(local:<host>)"."""
+    import socket
+
+    from aspire_data import __version__
+    guid = os.environ.get("CONNECT_CONTENT_GUID", "").strip()
+    return f"aspire_data/{__version__} ({f'connect:{guid}' if guid else f'local:{socket.gethostname()}'})"
+
+
 class SportsApiError(RuntimeError):
     """Sports API returned an envelope-level failure."""
 
@@ -77,7 +87,7 @@ class SportsApi:
     def __init__(self, base_url: str | None = None,
                  api_key: str | None = None, timeout: float = 30.0):
         self.base_url = (base_url or _base()).rstrip("/")
-        headers: dict[str, str] = {}
+        headers: dict[str, str] = {"User-Agent": _user_agent()}
         # Some tools require auth; ENV not required if your usage is read-only
         api_key = api_key or os.environ.get("SPORTS_API_KEY", "")
         if api_key:
