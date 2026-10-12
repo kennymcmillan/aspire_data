@@ -167,6 +167,9 @@ _EVENT_BASE = {
     "800m": "800m", "1000m": "1000m", "1500m": "1500m", "2000m": "2000m",
     "3000m": "3000m", "5000m": "5000m", "10000m": "10000m",
     "60m Hurdles": "60mH", "110m Hurdles": "110mH",
+    # the norms table holds these; the names were missing, so 400mH athletes read "no norms" (2026-10-11)
+    "400m Hurdles": "400mH",
+    "3000m Steeplechase": "3000mSC", "2000m Steeplechase": "2000mSC", "1500m Steeplechase": "1500mSC",
     "Long Jump": "Long Jump", "High Jump": "High Jump",
     "Triple Jump": "Triple Jump", "Pole Vault": "Pole Vault",
     "Shot Put": "Shot Put", "Discus Throw": "Discus Throw",
@@ -183,6 +186,8 @@ _IMPLEMENT_BY_AGE = {
     "Javelin Throw": [(12, "(400g)"), (14, "(500g)"), (16, "(600g)"),
                       (18, "(700g)"), (999, "(800g)")],
     "110mH":         [(16, "(84cm)"), (18, "(91cm)"), (20, "(99cm)"), (999, "")],
+    # 400mH: no (84cm) variant on purpose. Its rows for ages 15-20 are corrupt in the norms table (p50 ~110-119 s,
+    # checked 2026-10-11); the plain 400mH norms are sane from age 14, so every age reads those.
 }
 
 _NORMS_DF = None   # process cache for the default-query path (static reference)
