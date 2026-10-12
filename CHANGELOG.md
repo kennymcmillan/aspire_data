@@ -2,6 +2,19 @@
 
 All notable changes to `aspire_data`.
 
+## [0.25.2] - 2026-10-12
+
+### Added
+- `SportsApi` sends `User-Agent: aspire_data/<version> (connect:<CONNECT_CONTENT_GUID>)` on Posit
+  Connect, else `(local:<hostname>)`, so the Sports API logs can name the calling app.
+
+## [0.25.1] - 2026-10-12
+
+### Fixed
+- `SportsApi.tool()` / `tool_raw()` / `tool_write()` send a per-call `api_key=` as the `X-API-Key`
+  header too. Since 2026-10-12 the Sports API gates PII tables and reads the key from the header
+  first; a body-only key was refused for a while. The body copy stays.
+
 ## [0.25.0] - 2026-10-11
 
 ### Added
