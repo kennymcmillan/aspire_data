@@ -55,6 +55,26 @@ def test_api_key_header_when_set(mock_httpx):
     assert mock_httpx.instances[-1].headers["X-API-Key"] == "stub-sports-key"
 
 
+@pytest.mark.parametrize("method", ["tool", "tool_raw", "tool_write"])
+def test_per_call_api_key_is_sent_as_header(mock_httpx, monkeypatch, method):
+    # Since 2026-10-12 the Sports API reads the key ONLY from X-API-Key; a key in
+    # parameters.api_key alone is refused. Apps pass api_key= per call, so the
+    # client must lift it into the header for that request.
+    monkeypatch.delenv("SPORTS_API_KEY", raising=False)
+    from aspire_data.sports_api import SportsApi
+    api = SportsApi()
+    getattr(api, method)("execute_write_sql", sql="SELECT 1", api_key="per-call-key")
+    _, _, kw = mock_httpx.instances[-1].calls[-1]
+    assert (kw.get("headers") or {}).get("X-API-Key") == "per-call-key"
+
+
+def test_no_per_call_key_sends_no_extra_header(mock_httpx):
+    from aspire_data.sports_api import SportsApi
+    SportsApi().tool("query_table", table_name="t")
+    _, _, kw = mock_httpx.instances[-1].calls[-1]
+    assert "X-API-Key" not in (kw.get("headers") or {})   # client-level header still applies
+
+
 def test_api_no_key_header_when_unset(mock_httpx, monkeypatch):
     monkeypatch.delenv("SPORTS_API_KEY", raising=False)
     from aspire_data.sports_api import SportsApi

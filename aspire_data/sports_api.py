@@ -86,12 +86,21 @@ class SportsApi:
             base_url=self.base_url, headers=headers, timeout=timeout,
         )
 
+    def _post_tool(self, name: str, params: dict):
+        """POST /api/tools/<name>. A per-call `api_key` is ALSO sent as the
+        X-API-Key header: since 2026-10-12 the API reads the key only from
+        the header (a body-only key is refused), and many apps pass it per
+        call. The body copy stays for older API builds."""
+        key = params.get("api_key")
+        extra = {"headers": {"X-API-Key": key}} if key else {}
+        return self._client.post(f"/api/tools/{name}",
+                                 json={"parameters": params}, **extra)
+
     def tool(self, name: str, **params) -> Any:
         """Call /api/tools/<name> with the `parameters` envelope.
         Returns the unwrapped records (list of dicts).
         Raises httpx.HTTPStatusError on non-2xx."""
-        r = self._client.post(f"/api/tools/{name}",
-                               json={"parameters": params})
+        r = self._post_tool(name, params)
         r.raise_for_status()
         body = r.json()
         # Tool responses use {ok, result: {data: {records: [...]}}}
@@ -105,8 +114,7 @@ class SportsApi:
         """Like tool() but returns the FULL response body (envelope
         included: ok / result.success / result.error / rows_affected).
         Use when the caller needs more than the records list."""
-        r = self._client.post(f"/api/tools/{name}",
-                               json={"parameters": params})
+        r = self._post_tool(name, params)
         r.raise_for_status()
         return r.json()
 

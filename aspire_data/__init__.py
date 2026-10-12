@@ -53,7 +53,7 @@ CLI
 """
 from __future__ import annotations
 
-__version__ = "0.25.0"
+__version__ = "0.25.1"
 
 __all__ = [
     "__version__",
