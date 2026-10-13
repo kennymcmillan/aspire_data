@@ -39,6 +39,31 @@ def test_tool_unwraps_result_data_records(mock_httpx):
     assert out == rows
 
 
+def test_a_tool_error_inside_a_200_is_logged_not_silent(mock_httpx, caplog):
+    """API fa24222 sends X-Tool-Error when a tool fails inside a 200. tool() used to return [] silently, so an app
+    showed an empty page with a clean log; now the failure is in the log (return value unchanged)."""
+    import logging
+    from aspire_data.sports_api import SportsApi
+    api = SportsApi()
+    mock_httpx.instances[-1].set_response(
+        json_body={"ok": True, "result": {"success": False, "error": "table missing", "data": {"records": []}}},
+        headers={"content-type": "application/json", "X-Tool-Error": "table missing"})
+    with caplog.at_level(logging.WARNING, logger="aspire_data.sports_api"):
+        out = api.tool("query_table", table="nope")
+    assert out == []
+    assert "query_table" in caplog.text and "table missing" in caplog.text
+
+
+def test_a_clean_tool_call_logs_nothing(mock_httpx, caplog):
+    import logging
+    from aspire_data.sports_api import SportsApi
+    api = SportsApi()
+    mock_httpx.instances[-1].set_response(json_body={"ok": True, "result": {"data": {"records": [{"a": 1}]}}})
+    with caplog.at_level(logging.WARNING, logger="aspire_data.sports_api"):
+        api.tool("query_table", table="ok")
+    assert caplog.text == ""
+
+
 def test_tool_returns_data_when_no_records_key(mock_httpx):
     from aspire_data.sports_api import SportsApi
     api = SportsApi()

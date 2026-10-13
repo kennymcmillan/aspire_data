@@ -30,6 +30,7 @@ from __future__ import annotations
 
 __all__ = ['SportsApi', 'SportsApiError', 'SportsApiWriteError', 'sql_literal']
 
+import logging
 import os
 from datetime import date, datetime
 from typing import Any
@@ -37,6 +38,8 @@ from typing import Any
 import httpx
 
 from aspire_data._common import _base
+
+log = logging.getLogger(__name__)
 
 
 def sql_literal(v: Any) -> str:
@@ -115,6 +118,9 @@ class SportsApi:
         body = r.json()
         # Tool responses use {ok, result: {data: {records: [...]}}}
         result = body.get("result") or {}
+        err = (r.headers or {}).get("X-Tool-Error") or (result.get("error") if result.get("success") is False else None)
+        if err:   # a tool that failed inside a 200 must reach the log, not just look like an empty result
+            log.warning("Sports API tool %s returned an error inside a 200: %s", name, str(err)[:300])
         data = result.get("data") or {}
         if isinstance(data, dict) and "records" in data:
             return data["records"]
