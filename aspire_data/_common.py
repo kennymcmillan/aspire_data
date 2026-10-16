@@ -61,16 +61,25 @@ def sports_client() -> httpx.Client:
     return cli
 
 
+def _key_headers() -> dict:
+    """SPORTS_API_KEY as the X-API-Key header, read per call (never frozen into the cached
+    client). Since 2026-10-12 the Sports API refuses keyless reads of PII tables
+    (athlete_identifiers); without this every whoop / firstbeat / identifiers read 401'd
+    at the id lookup (0.25.3)."""
+    key = os.environ.get("SPORTS_API_KEY", "")
+    return {"X-API-Key": key} if key else {}
+
+
 def get(path: str, *, params: dict | None = None,
         timeout: float = DEFAULT_TIMEOUT) -> httpx.Response:
-    """GET against the Sports API via the shared client."""
-    return sports_client().get(path, params=params, timeout=timeout)
+    """GET against the Sports API via the shared client, key in the header."""
+    return sports_client().get(path, params=params, timeout=timeout, headers=_key_headers())
 
 
 def post(path: str, *, json: dict | None = None,
          timeout: float = DEFAULT_TIMEOUT) -> httpx.Response:
-    """POST against the Sports API via the shared client."""
-    return sports_client().post(path, json=json, timeout=timeout)
+    """POST against the Sports API via the shared client, key in the header."""
+    return sports_client().post(path, json=json, timeout=timeout, headers=_key_headers())
 
 
 def register_cache(cache) -> None:

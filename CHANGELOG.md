@@ -2,6 +2,16 @@
 
 All notable changes to `aspire_data`.
 
+## [0.25.3] - 2026-10-16
+
+### Fixed
+- The shared plumbing behind `whoop`, `firstbeat`, `identifiers` and `supplements`
+  (`_common.get` / `_common.post`) now sends `SPORTS_API_KEY` as the `X-API-Key` header,
+  read per call. 0.25.1 fixed only `SportsApi`; these modules still read
+  `athlete_identifiers` keyless, so since the 2026-10-12 PII gate every
+  `whoop_summary` / `firstbeat_summary` 401'd at the id lookup and apps showed no
+  WHOOP / Firstbeat data with a clean log (found from endurance's photo cards).
+
 ## [0.25.2] - 2026-10-12
 
 ### Added
