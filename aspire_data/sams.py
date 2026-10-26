@@ -91,6 +91,26 @@ def first_target_event(raw: str | None) -> str | None:
     return next((x for x in parts if x and x.upper() != "TBD"), None)
 
 
+def _secs(v) -> float | None:
+    """SAMS timeResult '00:00:09.3200000' -> 9.32 seconds."""
+    try:
+        h, m, s = str(v).split(":")
+        return int(h) * 3600 + int(m) * 60 + float(s)
+    except (TypeError, ValueError):
+        return None
+
+
+def _fmt_time(sec: float) -> str:
+    """9.32 -> '9.32'; 125.33 -> '2:05.33'; 3725.0 -> '1:02:05.00'."""
+    if sec < 60:
+        return f"{sec:.2f}"
+    m, s = divmod(sec, 60)
+    if m < 60:
+        return f"{int(m)}:{s:05.2f}"
+    h, m = divmod(int(m), 60)
+    return f"{h}:{m:02d}:{s:05.2f}"
+
+
 class SamsError(RuntimeError):
     """Raised on SAMS 4xx/5xx — carries the response detail."""
 
@@ -204,6 +224,7 @@ class SamsClient:
         self._roster_cache:      TTLCache = TTLCache(maxsize=400,  ttl=600)
         self._sport_cache:       TTLCache = TTLCache(maxsize=20,   ttl=roster_cache_ttl)
         self._enrollments_cache: TTLCache = TTLCache(maxsize=1,    ttl=cache_ttl)
+        self._comp_cache:        TTLCache = TTLCache(maxsize=5000, ttl=cache_ttl)
 
     # ---- low-level GET ----
     def _get(self, path: str, params: dict | None = None):
@@ -498,6 +519,87 @@ class SamsClient:
         athletes.sort(key=lambda a: (a.get("full_name") or "").lower())
         self._sport_cache[key] = athletes
         return athletes
+
+    # ---- athletics competition results ----
+    def _comp_event(self, event_id: int) -> dict:
+        """CompetitionEvent + its CompetitionMaster, cached (shared by every
+        athlete in the event)."""
+        key = int(event_id)
+        if key not in self._comp_cache:
+            ev = self._get(f"/api/ExternalApps/CompetitionEvent/{key}") or {}
+            cid = ev.get("competitionId")
+            ev["_master"] = (self._get(f"/api/ExternalApps/CompetitionMaster/{int(cid)}") or {}
+                             if cid else {})
+            self._comp_cache[key] = ev
+        return self._comp_cache[key]
+
+    def _player_comp_rows(self, player_id: int) -> list[dict]:
+        pid = int(player_id)
+        out = []
+        for kind in ("Track", "Field"):
+            rows = self._get(f"/api/ExternalApps/Competition{kind}Results/Search",
+                             params={"PlayerId": pid}) or []
+            out += [dict(r, _kind=kind.lower()) for r in rows if r.get("isActive", True)]
+        return out
+
+    def competition_results(self, player_ids) -> list[dict]:
+        """Athletics track + field results for these SAMS players, one row per
+        (player, competition event), in the Athletics_Combined column shape
+        (Competition, Start_Date, Venue, Event_standard, Result, Result_clean,
+        Wind, Position, Personal_Best) plus sams_player_id / sams_event_id /
+        sams_valid. Field events keep the best mark across attempt rows. A
+        player whose read fails is skipped, never raised."""
+        raw: list[dict] = []
+        futs = [self._pool.submit(self._player_comp_rows, p) for p in {int(p) for p in player_ids}]
+        for fut in as_completed(futs, timeout=120):
+            try:
+                raw += fut.result()
+            except Exception:  # noqa: BLE001
+                continue
+        for eid in {r["competitionEventId"] for r in raw if r.get("competitionEventId")}:
+            try:
+                self._comp_event(eid)
+            except Exception:  # noqa: BLE001
+                self._comp_cache[int(eid)] = {}
+
+        groups: dict[tuple, list[dict]] = {}
+        for r in raw:
+            if r.get("competitionEventId") and r.get("playerId"):
+                groups.setdefault((r["playerId"], r["competitionEventId"], r["_kind"]), []).append(r)
+
+        out = []
+        for (pid, eid, kind), rows in groups.items():
+            ev = self._comp_cache.get(int(eid)) or {}
+            r0 = rows[0]
+            flag = next((f.upper() for f in ("dq", "dnf", "dns") if any(x.get(f) for x in rows)), None)
+            if kind == "track":
+                sec = _secs(r0.get("timeResult"))
+                mark = flag or (_fmt_time(sec) if sec else None)
+                event = r0.get("resultType") or ev.get("eventTypeName")
+            else:
+                vals = [v for x in rows for v in (x.get("bestResult"), x.get("height"), x.get("distance"))
+                        if isinstance(v, (int, float)) and v > 0]
+                mark = flag or (f"{max(vals):.2f}" if vals else None)
+                event = ev.get("eventTypeName")
+            # shortcut: a row with no mark and no DNS/DNF/DQ flag is dropped (no "NM" invented);
+            # emit NM once SAMS records failed attempts explicitly.
+            if not mark or not event:
+                continue
+            wind = r0.get("windSpeed")
+            out.append({
+                "sams_player_id": int(pid), "sams_event_id": int(eid),
+                "sams_valid": any(x.get("isValidResult") for x in rows),
+                "Competition": (ev.get("_master") or {}).get("name") or ev.get("competitionName"),
+                "Start_Date": ev.get("eventDate"),
+                "Venue": (ev.get("venueLocation") or "").replace(", null", "") or None,
+                "Event_standard": event,
+                "Event_category": " ".join(filter(None, (ev.get("ageCategoryName"), ev.get("gender")))) or None,
+                "Result": mark, "Result_clean": mark,
+                "Wind": f"{wind:+.1f}" if isinstance(wind, (int, float)) and kind == "track" else None,
+                "Position": str(r0["place"]) if r0.get("place") is not None else None,
+                "Personal_Best": "1" if any(x.get("isPersonalBest") for x in rows) else "0",
+            })
+        return out
 
     def close(self) -> None:
         self._client.close()

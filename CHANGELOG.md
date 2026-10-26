@@ -2,6 +2,16 @@
 
 All notable changes to `aspire_data`.
 
+## [0.26.0] - 2026-10-26
+
+### Added
+- `SamsClient.competition_results(player_ids)`: athletics track + field results from the SAMS
+  ExternalApps competition endpoints (`CompetitionTrackResults` / `CompetitionFieldResults` by
+  PlayerId, joined to `CompetitionEvent` + `CompetitionMaster`, cached). One row per player x
+  event in the Athletics_Combined shape plus `sams_player_id` / `sams_event_id` / `sams_valid`.
+  Field events keep the best mark across attempt rows; times as `9.32` / `2:05.33`; DNS/DNF/DQ
+  as text; rows with no mark are dropped. SAMS holds Aspire meets athletics.app has no result for.
+
 ## [0.25.3] - 2026-10-16
 
 ### Fixed
