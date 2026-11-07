@@ -2,6 +2,16 @@
 
 All notable changes to `aspire_data`.
 
+## [0.27.0] - 2026-11-07
+
+### Added
+- `aspire_data.polar`: Polar Team Pro recall over the Sports API `/api/polar/*` routes.
+  `polar_sessions(player_id=...)` resolves `athlete_identifiers.polar_id` (no link = `{"matched": False}`,
+  nothing fetched); `squad_sessions(from, to)`; `session_trace(id, every=1)` = HR trace.
+  `zone_minutes(t_s, hr, edges)` = time in zones for any model: lab `[LT1, LT2]` (3 zones) or
+  `maxhr_edges(max_hr)` (Polar default 60/70/80/90 %). Time-weighted (1 Hz = 2 Hz), gaps capped
+  at 5 s, HR < 30 or missing counts nowhere, an HR on an edge goes to the higher zone.
+
 ## [0.26.0] - 2026-10-26
 
 ### Added
